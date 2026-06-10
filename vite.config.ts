@@ -17,7 +17,8 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig({
-  base: '/nutri01/',
+  // GitHub Pages serve em /nutri01/; Netlify e dev local servem na raiz
+  base: process.env.GITHUB_ACTIONS ? '/nutri01/' : '/',
   plugins: [
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
