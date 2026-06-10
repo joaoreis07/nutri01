@@ -16,17 +16,25 @@ import {
   TrendingUp,
   Award,
   Clock,
-  Target
+  Target,
+  Lock
 } from 'lucide-react';
 import { Button } from './components/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './components/Card';
+import naraHero from '../assets/nara-hero.png';
+import naraSobre from '../assets/nara-sobre.png';
 
 export default function App() {
-  const whatsappNumber = "5511999999999"; // Número da nutricionista
+  const whatsappNumber = "5543988300445"; // Número da nutricionista
   const whatsappMessage = "Olá! Gostaria de agendar uma consulta nutricional.";
 
   const handleWhatsApp = () => {
     window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+  };
+
+  const handleAgendar = () => {
+    window.location.hash = '#/agendar';
+    window.scrollTo(0, 0);
   };
 
   const fadeInUp = {
@@ -60,7 +68,7 @@ export default function App() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <Button size="lg" onClick={handleWhatsApp} className="group">
+                <Button size="lg" onClick={handleAgendar} className="group">
                   <MessageCircle className="w-5 h-5 group-hover:scale-110 transition-transform" />
                   Agendar Consulta
                 </Button>
@@ -93,8 +101,8 @@ export default function App() {
             >
               <div className="relative rounded-3xl overflow-hidden shadow-2xl">
                 <img
-                  src="https://images.unsplash.com/photo-1490818387583-1baba5e638af?w=800&h=1000&fit=crop&auto=format"
-                  alt="Alimentação saudável e colorida"
+                  src={naraHero}
+                  alt="Nara Rossetto - Nutricionista"
                   className="w-full h-auto object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent" />
@@ -120,7 +128,7 @@ export default function App() {
         <div className="container mx-auto px-4">
           <motion.div {...fadeInUp} className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold mb-4 text-foreground">Prazer, sou sua nutricionista</h2>
+              <h2 className="text-4xl font-bold mb-4 text-foreground">Prazer, sou Nara Rossetto</h2>
               <div className="w-20 h-1 bg-primary mx-auto rounded-full" />
             </div>
 
@@ -128,8 +136,8 @@ export default function App() {
               <div className="relative">
                 <div className="rounded-2xl overflow-hidden shadow-lg">
                   <img
-                    src="https://images.unsplash.com/photo-1585358682246-23acb1561f6b?w=600&h=800&fit=crop&auto=format"
-                    alt="Nutricionista profissional"
+                    src={naraSobre}
+                    alt="Nara Rossetto - Nutricionista"
                     className="w-full h-auto object-cover"
                   />
                 </div>
@@ -140,8 +148,9 @@ export default function App() {
 
               <div className="space-y-6">
                 <p className="text-lg text-foreground leading-relaxed">
-                  Sou nutricionista formada com especialização em nutrição clínica e esportiva,
-                  dedicada a transformar a relação das pessoas com a alimentação de forma acolhedora e profissional.
+                  Sou nutricionista e bacharel em Educação Física, pós-graduada em Nutrição Esportiva e Estética.
+                  Além do acompanhamento nutricional, também ofereço treino personalizado, unindo alimentação e
+                  exercício para transformar sua saúde de forma acolhedora e profissional.
                 </p>
 
                 <div className="space-y-4">
@@ -149,21 +158,21 @@ export default function App() {
                     <Check className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
                     <div>
                       <div className="font-semibold text-foreground">Formação Acadêmica</div>
-                      <div className="text-muted-foreground">Nutrição - Universidade Federal</div>
+                      <div className="text-muted-foreground">Nutrição e Educação Física (Bacharelado)</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Check className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
                     <div>
                       <div className="font-semibold text-foreground">Especializações</div>
-                      <div className="text-muted-foreground">Nutrição Clínica e Esportiva</div>
+                      <div className="text-muted-foreground">Pós-graduação em Nutrição Esportiva e Estética</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
                     <Check className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
                     <div>
                       <div className="font-semibold text-foreground">Registro Profissional</div>
-                      <div className="text-muted-foreground">CRN3 12345/P - Ativo</div>
+                      <div className="text-muted-foreground">CREF 038535-G/PR - Ativo</div>
                     </div>
                   </div>
                 </div>
@@ -194,7 +203,7 @@ export default function App() {
               { icon: Dumbbell, title: "Ganho de massa muscular", description: "Plano alimentar estratégico para hipertrofia e performance" },
               { icon: Apple, title: "Reeducação alimentar", description: "Mude sua relação com a comida de forma definitiva" },
               { icon: Activity, title: "Nutrição esportiva", description: "Otimize seu desempenho atlético com nutrição adequada" },
-              { icon: Heart, title: "Saúde da mulher", description: "Nutrição para gestação, amamentação e ciclos hormonais" },
+              { icon: Dumbbell, title: "Treino personalizado", description: "Treinos elaborados por profissional formada em Educação Física (CREF ativo)" },
               { icon: Sparkles, title: "Qualidade de vida", description: "Mais energia, disposição e saúde no dia a dia" },
             ].map((area, index) => (
               <motion.div
@@ -387,7 +396,7 @@ export default function App() {
               { icon: Target, title: "Plano 100% personalizado", description: "Estratégia única baseada nas suas necessidades e objetivos" },
               { icon: MessageCircle, title: "Suporte contínuo", description: "Acompanhamento próximo via WhatsApp durante todo o processo" },
               { icon: Sparkles, title: "Estratégias práticas", description: "Orientações aplicáveis à sua rotina real" },
-              { icon: Activity, title: "Consultas flexíveis", description: "Atendimento online e presencial conforme sua preferência" },
+              { icon: Activity, title: "Consultas flexíveis", description: "Atendimento online e presencial em Ribeirão Claro-PR" },
               { icon: Award, title: "Resultados comprovados", description: "Mais de 300 pacientes transformados" },
             ].map((differential, index) => (
               <motion.div
@@ -456,7 +465,7 @@ export default function App() {
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-foreground">Nutricionista</h3>
+              <h3 className="text-xl font-semibold text-foreground">Nara Rossetto</h3>
               <p className="text-muted-foreground">
                 Transformando vidas através da alimentação saudável e sustentável.
               </p>
@@ -467,11 +476,11 @@ export default function App() {
               <div className="space-y-2 text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="w-4 h-4" />
-                  <span>(11) 99999-9999</span>
+                  <span>(43) 98830-0445</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  <span>contato@nutricionista.com</span>
+                  <span>naraorossetto@gmail.com</span>
                 </div>
               </div>
             </div>
@@ -480,7 +489,7 @@ export default function App() {
               <h4 className="font-semibold text-foreground">Localização</h4>
               <div className="flex items-start gap-2 text-muted-foreground">
                 <MapPin className="w-4 h-4 mt-1 flex-shrink-0" />
-                <span>São Paulo, SP<br />Atendimento presencial e online</span>
+                <span>Rua Romoaldo Chiarotti, 403<br />Ribeirão Claro - PR<br />Atendimento presencial e online</span>
               </div>
             </div>
 
@@ -488,7 +497,7 @@ export default function App() {
               <h4 className="font-semibold text-foreground">Redes Sociais</h4>
               <div className="flex gap-4">
                 <a
-                  href="https://instagram.com"
+                  href="https://instagram.com/nararossetto"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
@@ -504,7 +513,7 @@ export default function App() {
                   <MessageCircle className="w-5 h-5" />
                 </a>
                 <a
-                  href="mailto:contato@nutricionista.com"
+                  href="mailto:naraorossetto@gmail.com"
                   className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
                 >
                   <Mail className="w-5 h-5" />
@@ -514,7 +523,16 @@ export default function App() {
           </div>
 
           <div className="border-t border-border pt-8 text-center text-muted-foreground">
-            <p>&copy; 2026 Nutricionista. Todos os direitos reservados. CRN3 12345/P</p>
+            <p>&copy; 2026 Nara Rossetto. Todos os direitos reservados. CREF 038535-G/PR</p>
+            <div className="mt-6 flex justify-center">
+              <a
+                href="#/admin"
+                className="inline-flex items-center gap-2 px-6 h-12 rounded-lg border-2 border-primary text-primary font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
+              >
+                <Lock className="w-4 h-4" />
+                Área da Nutricionista
+              </a>
+            </div>
           </div>
         </div>
       </footer>
