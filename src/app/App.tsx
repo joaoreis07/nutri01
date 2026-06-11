@@ -203,6 +203,7 @@ export default function App() {
               { icon: Dumbbell, title: "Ganho de massa muscular", description: "Plano alimentar estratégico para hipertrofia e performance" },
               { icon: Apple, title: "Reeducação alimentar", description: "Mude sua relação com a comida de forma definitiva" },
               { icon: Activity, title: "Nutrição esportiva", description: "Otimize seu desempenho atlético com nutrição adequada" },
+              { icon: Heart, title: "Saúde da mulher", description: "Nutrição para as fases e necessidades do corpo feminino, com equilíbrio hormonal e bem-estar" },
               { icon: Dumbbell, title: "Treino personalizado", description: "Treinos elaborados por profissional formada em Educação Física (CREF ativo)" },
               { icon: Sparkles, title: "Qualidade de vida", description: "Mais energia, disposição e saúde no dia a dia" },
             ].map((area, index) => (
@@ -337,18 +338,33 @@ export default function App() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {[
               {
-                name: "Carla Mendes",
-                text: "Profissional incrível! Me ajudou a emagrecer 15kg sem passar fome. O acompanhamento fez toda diferença!",
+                name: "Mariana Castro",
+                text: "Adorei a consulta, me senti muito acolhida, você me escutou com empatia e paciência... e estou super feliz com o meu plano alimentar, que é super prazeroso de seguir e se encaixou perfeitamente bem na minha rotina e no meu paladar!",
                 rating: 5
               },
               {
-                name: "Ricardo Alves",
-                text: "Finalmente consegui ganhar massa muscular de forma saudável. Plano alimentar super personalizado!",
+                name: "Fernanda Oliveira",
+                text: "Apenas 30 dias e eu já me sinto tão melhor, tão mais disposta. A disposição me fez, depois de 7 anos dedicados à corrida, alcançar o tão sonhado pace sub 05. Um cardápio variado, sem complicações e personalizado. Você arrasa demais!",
                 rating: 5
               },
               {
-                name: "Juliana Souza",
-                text: "Mudou completamente minha relação com a comida. Hoje tenho uma alimentação equilibrada e prazerosa.",
+                name: "Patrícia Ramos",
+                text: "Nestes 30 dias de acompanhamento nutricional, já obtive resultados que me deixaram muito feliz: reduzi 3,3% de gordura corporal e aumentei 1,3% de massa muscular. Mais do que números, esses resultados representam um novo estilo de vida.",
+                rating: 5
+              },
+              {
+                name: "Camila Duarte",
+                text: "Nara como profissional é incrível, atende de uma maneira personalizada, muito atenciosa e comprometida. Me ajudou a melhorar minha alimentação sem restrições exageradas. Só agradecer o trabalho excelente, indico muito!",
+                rating: 5
+              },
+              {
+                name: "Renata Almeida",
+                text: "Sempre me senti acolhida e confortável durante esse processo. Hoje estou encontrando mais equilíbrio, fazendo escolhas mais conscientes e, principalmente, fazendo as pazes com a alimentação saudável. Sou muito grata por todo o cuidado, apoio e profissionalismo.",
+                rating: 5
+              },
+              {
+                name: "Beatriz Nogueira",
+                text: "Minha nutri maravilhosa, nunca imaginei que seria tão fácil cuidar da alimentação de forma leve e equilibrada. Você conduziu tudo de um jeito que se encaixou perfeitamente na minha rotina corrida, sem restrições exageradas e de forma muito natural.",
                 rating: 5
               },
             ].map((testimonial, index) => (
@@ -370,7 +386,12 @@ export default function App() {
                         <Users className="w-6 h-6 text-primary" />
                       </div>
                       <div>
-                        <div className="font-semibold text-foreground">{testimonial.name}</div>
+                        <div
+                          className="font-semibold text-foreground blur-[5px] select-none"
+                          aria-hidden="true"
+                        >
+                          {testimonial.name}
+                        </div>
                         <div className="text-sm text-muted-foreground">Paciente</div>
                       </div>
                     </div>
