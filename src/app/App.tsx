@@ -205,6 +205,7 @@ export default function App() {
               { icon: Activity, title: "Nutrição esportiva", description: "Otimize seu desempenho atlético com nutrição adequada" },
               { icon: Heart, title: "Saúde da mulher", description: "Nutrição para as fases e necessidades do corpo feminino, com equilíbrio hormonal e bem-estar" },
               { icon: Dumbbell, title: "Treino personalizado", description: "Treinos elaborados por profissional formada em Educação Física (CREF ativo)" },
+              { icon: Activity, title: "Avaliação física", description: "Realizada através da adipometria (dobras cutâneas), bioimpedância (InBody) e medidas de circunferências corporais" },
               { icon: Sparkles, title: "Qualidade de vida", description: "Mais energia, disposição e saúde no dia a dia" },
             ].map((area, index) => (
               <motion.div
@@ -264,63 +265,6 @@ export default function App() {
                 {index < 3 && (
                   <div className="hidden lg:block absolute top-10 left-full w-full h-0.5 bg-primary/20" style={{ width: '100%', left: '60%' }} />
                 )}
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* SEÇÃO 5 - RESULTADOS */}
-      <section className="py-24">
-        <div className="container mx-auto px-4">
-          <motion.div {...fadeInUp} className="text-center mb-16">
-            <h2 className="text-4xl font-bold mb-4 text-foreground">Resultados dos pacientes</h2>
-            <p className="text-xl text-muted-foreground">Transformações reais de quem confiou no processo</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {[
-              {
-                name: "Maria Silva",
-                goal: "Emagrecimento",
-                result: "-12kg em 4 meses",
-                image: "https://images.unsplash.com/photo-1548690312-e3b507d8c110?w=600&h=600&fit=crop&auto=format"
-              },
-              {
-                name: "João Santos",
-                goal: "Ganho de massa",
-                result: "+8kg de massa magra",
-                image: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=600&h=600&fit=crop&auto=format"
-              },
-              {
-                name: "Ana Costa",
-                goal: "Reeducação alimentar",
-                result: "Hábitos transformados",
-                image: "https://images.unsplash.com/photo-1644704170910-a0cdf183649b?w=600&h=600&fit=crop&auto=format"
-              },
-            ].map((person, index) => (
-              <motion.div
-                key={index}
-                {...fadeInUp}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Card className="overflow-hidden">
-                  <div className="aspect-square bg-gradient-to-br from-primary/10 to-accent/10 flex items-center justify-center overflow-hidden">
-                    <img
-                      src={person.image}
-                      alt={`Resultado de ${person.name}`}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <CardContent className="p-6 space-y-2">
-                    <h3 className="text-xl font-semibold text-foreground">{person.name}</h3>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Target className="w-4 h-4" />
-                      {person.goal}
-                    </div>
-                    <div className="text-2xl font-bold text-primary">{person.result}</div>
-                  </CardContent>
-                </Card>
               </motion.div>
             ))}
           </div>

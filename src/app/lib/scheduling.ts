@@ -7,9 +7,18 @@ export interface Appointment {
   whatsapp: string;
   email: string;
   objective: string;
+  /** Serviço escolhido e valor no momento do agendamento */
+  service?: string;
+  price?: number;
   date: string; // YYYY-MM-DD
   time: string; // HH:mm
   createdAt: string;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  price: number;
 }
 
 export interface ScheduleConfig {
@@ -19,6 +28,8 @@ export interface ScheduleConfig {
   timeSlots: string[];
   /** Datas específicas bloqueadas (feriados, férias etc.) - YYYY-MM-DD */
   blockedDates: string[];
+  /** Serviços oferecidos, com valores */
+  services: Service[];
 }
 
 const CONFIG_KEY = 'nara_schedule_config';
@@ -29,10 +40,17 @@ const SESSION_KEY = 'nara_admin_session';
 const ADMIN_USER = 'nara';
 const ADMIN_PASSWORD = 'nara2026';
 
+const DEFAULT_SERVICES: Service[] = [
+  { id: 'consulta', name: 'Consulta nutricional com retorno', price: 250 },
+  { id: 'consulta-treino', name: 'Consulta nutricional com retorno + treino personalizado', price: 300 },
+  { id: 'avaliacao', name: 'Avaliação física', price: 100 },
+];
+
 const DEFAULT_CONFIG: ScheduleConfig = {
   weekdays: [1, 2, 3, 4, 5],
   timeSlots: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00'],
   blockedDates: [],
+  services: DEFAULT_SERVICES,
 };
 
 // ---------- Utilitários de data ----------
@@ -79,6 +97,10 @@ export function loadConfig(): ScheduleConfig {
       weekdays: Array.isArray(parsed.weekdays) ? parsed.weekdays : DEFAULT_CONFIG.weekdays,
       timeSlots: Array.isArray(parsed.timeSlots) ? parsed.timeSlots : DEFAULT_CONFIG.timeSlots,
       blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
+      services:
+        Array.isArray(parsed.services) && parsed.services.length > 0
+          ? parsed.services
+          : DEFAULT_SERVICES,
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -146,11 +168,17 @@ export function dayHasFreeSlots(dateStr: string): boolean {
 
 // ---------- Agendamentos ----------
 
+export function formatPriceBR(price: number): string {
+  return price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 export function bookAppointment(data: {
   name: string;
   whatsapp: string;
   email: string;
   objective: string;
+  service: string;
+  price: number;
   date: string;
   time: string;
 }): { success: boolean; error?: string } {
@@ -170,6 +198,8 @@ export function bookAppointment(data: {
     whatsapp: data.whatsapp.trim(),
     email: data.email.trim(),
     objective: data.objective.trim(),
+    service: data.service,
+    price: data.price,
     date: data.date,
     time: data.time,
     createdAt: new Date().toISOString(),
@@ -244,6 +274,34 @@ export function blockDateRange(startStr: string, endStr: string): ScheduleConfig
     blocked.add(toDateStr(d));
   }
   cfg.blockedDates = Array.from(blocked).sort();
+  saveConfig(cfg);
+  return cfg;
+}
+
+// ---------- Serviços (admin) ----------
+
+export function addService(name: string, price: number): ScheduleConfig {
+  const cfg = loadConfig();
+  cfg.services = [
+    ...cfg.services,
+    { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: name.trim(), price },
+  ];
+  saveConfig(cfg);
+  return cfg;
+}
+
+export function updateService(id: string, name: string, price: number): ScheduleConfig {
+  const cfg = loadConfig();
+  cfg.services = cfg.services.map((s) =>
+    s.id === id ? { ...s, name: name.trim(), price } : s
+  );
+  saveConfig(cfg);
+  return cfg;
+}
+
+export function removeService(id: string): ScheduleConfig {
+  const cfg = loadConfig();
+  cfg.services = cfg.services.filter((s) => s.id !== id);
   saveConfig(cfg);
   return cfg;
 }

@@ -11,6 +11,8 @@ import {
   MessageCircle,
   Pencil,
   Plus,
+  Sparkles,
+  Tag,
   Target,
   Trash2,
   User,
@@ -22,22 +24,26 @@ import { Calendar } from '../components/Calendar';
 import {
   Appointment,
   ScheduleConfig,
+  addService,
   addTimeSlot,
   blockDate,
   blockDateRange,
   cancelAppointment,
   editTimeSlot,
   formatDateShortBR,
+  formatPriceBR,
   isLoggedIn,
   loadAppointments,
   loadConfig,
   login,
   logout,
   parseDateStr,
+  removeService,
   removeTimeSlot,
   setWeekdays,
   toDateStr,
   unblockDate,
+  updateService,
 } from '../lib/scheduling';
 
 const WEEKDAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -45,7 +51,7 @@ const WEEKDAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sext
 const inputClass =
   'h-11 px-3 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
-type Tab = 'agendamentos' | 'horarios' | 'dias';
+type Tab = 'agendamentos' | 'horarios' | 'dias' | 'servicos';
 
 export default function AdminPanel() {
   const [logged, setLogged] = useState(isLoggedIn());
@@ -151,6 +157,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     { id: 'agendamentos', label: 'Agendamentos', icon: CalendarDays },
     { id: 'horarios', label: 'Horários', icon: Clock },
     { id: 'dias', label: 'Dias', icon: CalendarOff },
+    { id: 'servicos', label: 'Serviços e valores', icon: Tag },
   ];
 
   return (
@@ -196,6 +203,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         )}
         {tab === 'horarios' && <SlotsTab config={config} onChange={refresh} />}
         {tab === 'dias' && <DaysTab config={config} onChange={refresh} />}
+        {tab === 'servicos' && <ServicesTab config={config} onChange={refresh} />}
       </div>
     </div>
   );
@@ -299,6 +307,17 @@ function AppointmentCard({
               <User className="w-4 h-4 text-primary flex-shrink-0" />
               {a.name}
             </div>
+            {a.service && (
+              <div className="flex items-center gap-2 text-foreground">
+                <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+                <span>
+                  {a.service}
+                  {typeof a.price === 'number' && (
+                    <span className="font-semibold text-primary"> · {formatPriceBR(a.price)}</span>
+                  )}
+                </span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-muted-foreground">
               <MessageCircle className="w-4 h-4 text-primary flex-shrink-0" />
               {a.whatsapp}
@@ -422,6 +441,151 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
             <Plus className="w-4 h-4" />
             Adicionar horário
           </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------- Aba: Serviços ----------
+
+function ServicesTab({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newPrice, setNewPrice] = useState('');
+
+  const startEdit = (id: string, name: string, price: number) => {
+    setEditingId(id);
+    setEditName(name);
+    setEditPrice(String(price));
+  };
+
+  const handleSaveEdit = () => {
+    const price = Number(editPrice.replace(',', '.'));
+    if (editingId && editName.trim() && !isNaN(price) && price >= 0) {
+      updateService(editingId, editName, price);
+      setEditingId(null);
+      onChange();
+    }
+  };
+
+  const handleAdd = () => {
+    const price = Number(newPrice.replace(',', '.'));
+    if (newName.trim() && !isNaN(price) && price >= 0) {
+      addService(newName, price);
+      setNewName('');
+      setNewPrice('');
+      onChange();
+    }
+  };
+
+  const handleRemove = (id: string, name: string) => {
+    if (window.confirm(`Remover o serviço "${name}"?`)) {
+      removeService(id);
+      onChange();
+    }
+  };
+
+  return (
+    <Card className="hover:translate-y-0">
+      <CardHeader>
+        <CardTitle className="text-xl flex items-center gap-2">
+          <Tag className="w-5 h-5 text-primary" />
+          Serviços e valores
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Estes serviços aparecem para o paciente na hora de agendar. Você pode alterar os valores
+          quando quiser.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-3">
+          {config.services.length === 0 && (
+            <p className="text-sm text-muted-foreground">Nenhum serviço cadastrado.</p>
+          )}
+          {config.services.map((service) =>
+            editingId === service.id ? (
+              <div
+                key={service.id}
+                className="flex flex-col sm:flex-row gap-2 p-4 rounded-lg border border-primary bg-primary/5"
+              >
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className={`${inputClass} flex-1`}
+                  placeholder="Nome do serviço"
+                />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className={`${inputClass} w-32`}
+                  placeholder="Valor (R$)"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleSaveEdit}>Salvar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div
+                key={service.id}
+                className="flex items-center gap-3 p-4 rounded-lg border border-border"
+              >
+                <div className="flex-1">
+                  <div className="font-medium text-foreground">{service.name}</div>
+                  <div className="text-lg font-bold text-primary">{formatPriceBR(service.price)}</div>
+                </div>
+                <button
+                  onClick={() => startEdit(service.id, service.name, service.price)}
+                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                  aria-label={`Editar ${service.name}`}
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleRemove(service.id, service.name)}
+                  className="w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label={`Remover ${service.name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )
+          )}
+        </div>
+
+        <div className="pt-4 border-t border-border space-y-2">
+          <div className="font-medium text-foreground">Adicionar novo serviço</div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className={`${inputClass} flex-1`}
+              placeholder="Nome do serviço"
+            />
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+              className={`${inputClass} w-32`}
+              placeholder="Valor (R$)"
+            />
+            <Button onClick={handleAdd} disabled={!newName.trim() || !newPrice}>
+              <Plus className="w-4 h-4" />
+              Adicionar
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

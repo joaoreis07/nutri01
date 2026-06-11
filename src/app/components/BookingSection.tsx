@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, CheckCircle2, Clock, MessageCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, MessageCircle, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { Card, CardContent } from './Card';
 import { Calendar } from './Calendar';
@@ -8,7 +8,9 @@ import {
   bookAppointment,
   dayHasFreeSlots,
   formatDateBR,
+  formatPriceBR,
   getAvailableTimes,
+  loadConfig,
 } from '../lib/scheduling';
 
 const fadeInUp = {
@@ -24,11 +26,15 @@ const inputClass =
 export function BookingSection() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [form, setForm] = useState({ name: '', whatsapp: '', email: '', objective: '' });
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<{ date: string; time: string } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ date: string; time: string; service: string; price: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const services = loadConfig().services;
+  const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
 
   const refreshTimes = useCallback((date: string | null) => {
     setAvailableTimes(date ? getAvailableTimes(date) : []);
@@ -61,18 +67,25 @@ export function BookingSection() {
     /\S+@\S+\.\S+/.test(form.email) &&
     form.objective.trim().length > 0;
 
-  const canConfirm = formValid && selectedDate !== null && selectedTime !== null;
+  const canConfirm = formValid && selectedDate !== null && selectedTime !== null && selectedService !== null;
 
   const handleConfirm = () => {
-    if (!selectedDate || !selectedTime) return;
+    if (!selectedDate || !selectedTime || !selectedService) return;
     setError(null);
     const result = bookAppointment({
       ...form,
+      service: selectedService.name,
+      price: selectedService.price,
       date: selectedDate,
       time: selectedTime,
     });
     if (result.success) {
-      setConfirmed({ date: selectedDate, time: selectedTime });
+      setConfirmed({
+        date: selectedDate,
+        time: selectedTime,
+        service: selectedService.name,
+        price: selectedService.price,
+      });
     } else {
       setError(result.error ?? 'Não foi possível agendar. Tente novamente.');
       setSelectedTime(null);
@@ -85,6 +98,7 @@ export function BookingSection() {
     setForm({ name: '', whatsapp: '', email: '', objective: '' });
     setSelectedDate(null);
     setSelectedTime(null);
+    setSelectedServiceId(null);
     setError(null);
     setRefreshKey((k) => k + 1);
   };
@@ -110,12 +124,15 @@ export function BookingSection() {
                   <h3 className="text-3xl font-bold text-foreground">
                     Consulta agendada com sucesso!
                   </h3>
+                  <p className="text-lg text-muted-foreground">{confirmed.service}</p>
                   <p className="text-xl text-muted-foreground">
                     <span className="font-semibold text-foreground capitalize">
                       {formatDateBR(confirmed.date)}
                     </span>
                     {' '}às{' '}
                     <span className="font-semibold text-foreground">{confirmed.time}</span>
+                    {' '}·{' '}
+                    <span className="font-semibold text-primary">{formatPriceBR(confirmed.price)}</span>
                   </p>
                   <p className="text-muted-foreground max-w-md mx-auto">
                     Seu horário foi reservado. Qualquer dúvida, entre em contato pelo WhatsApp.
@@ -129,8 +146,36 @@ export function BookingSection() {
                 </div>
               ) : (
                 <div className="grid lg:grid-cols-2 gap-10">
-                  {/* Coluna 1: dados do paciente */}
-                  <div className="space-y-5">
+                  {/* Coluna 1: serviço e dados do paciente */}
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-primary" />
+                        Escolha o serviço
+                      </h3>
+                      <div className="space-y-2">
+                        {services.map((service) => (
+                          <button
+                            key={service.id}
+                            type="button"
+                            onClick={() => setSelectedServiceId(service.id)}
+                            className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                              selectedServiceId === service.id
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:border-primary/50'
+                            }`}
+                          >
+                            <span className="text-sm font-medium text-foreground">{service.name}</span>
+                            <span className={`text-sm font-bold whitespace-nowrap ${
+                              selectedServiceId === service.id ? 'text-primary' : 'text-muted-foreground'
+                            }`}>
+                              {formatPriceBR(service.price)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
                       <MessageCircle className="w-5 h-5 text-primary" />
                       Seus dados
@@ -237,6 +282,15 @@ export function BookingSection() {
                       <p className="text-sm text-destructive font-medium">{error}</p>
                     )}
 
+                    {selectedService && (
+                      <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <span className="text-sm text-foreground">{selectedService.name}</span>
+                        <span className="font-bold text-primary whitespace-nowrap">
+                          {formatPriceBR(selectedService.price)}
+                        </span>
+                      </div>
+                    )}
+
                     <Button
                       size="lg"
                       className="w-full"
@@ -248,7 +302,7 @@ export function BookingSection() {
                     </Button>
                     {!canConfirm && (
                       <p className="text-xs text-muted-foreground text-center">
-                        Preencha seus dados e selecione data e horário para confirmar.
+                        Escolha o serviço, preencha seus dados e selecione data e horário para confirmar.
                       </p>
                     )}
                   </div>
