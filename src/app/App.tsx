@@ -128,7 +128,7 @@ export default function App() {
         <div className="container mx-auto px-4">
           <motion.div {...fadeInUp} className="max-w-4xl mx-auto">
             <div className="text-center mb-12">
-              <h2 className="text-4xl font-bold mb-4 text-foreground">Prazer, sou Nara Rossetto</h2>
+              <h2 className="text-4xl font-bold mb-4 text-foreground">Prazer, sou <span className="whitespace-nowrap">Nara Rossetto</span></h2>
               <div className="w-20 h-1 bg-primary mx-auto rounded-full" />
             </div>
 
@@ -171,8 +171,8 @@ export default function App() {
                   <div className="flex items-start gap-3">
                     <Check className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
                     <div>
-                      <div className="font-semibold text-foreground">Registro Profissional</div>
-                      <div className="text-muted-foreground">CREF 038535-G/PR - Ativo</div>
+                      <div className="font-semibold text-foreground">Registros Profissionais</div>
+                      <div className="text-muted-foreground">CRN-8 19896/P · CREF 038535-G/PR</div>
                     </div>
                   </div>
                 </div>
@@ -544,7 +544,7 @@ export default function App() {
           </div>
 
           <div className="border-t border-border pt-8 text-center text-muted-foreground">
-            <p>&copy; 2026 Nara Rossetto. Todos os direitos reservados. CREF 038535-G/PR</p>
+            <p>&copy; 2026 Nara Rossetto. Todos os direitos reservados. CRN-8 19896/P · CREF 038535-G/PR</p>
             <div className="mt-6 flex justify-center">
               <a
                 href="#/admin"

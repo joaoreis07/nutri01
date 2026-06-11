@@ -61,7 +61,7 @@ export default function BookingPage() {
             </a>
           </div>
           <p className="text-sm text-muted-foreground text-center">
-            &copy; 2026 Nara Rossetto. Todos os direitos reservados. CREF 038535-G/PR
+            &copy; 2026 Nara Rossetto. Todos os direitos reservados. CRN-8 19896/P · CREF 038535-G/PR
           </p>
         </div>
       </footer>
