@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   CalendarDays,
   CalendarOff,
   CheckCircle2,
   Clock,
+  Loader2,
   Lock,
   LogOut,
   Mail,
@@ -29,14 +30,14 @@ import {
   blockDate,
   blockDateRange,
   cancelAppointment,
+  checkLoggedIn,
   editTimeSlot,
+  fetchAppointments,
+  fetchConfig,
   formatDateBR,
   formatDateShortBR,
   formatPriceBR,
   isDayAvailable,
-  isLoggedIn,
-  loadAppointments,
-  loadConfig,
   login,
   logout,
   parseDateStr,
@@ -49,6 +50,7 @@ import {
   unblockDate,
   unreserveSlot,
   updateService,
+  usingSupabase,
 } from '../lib/scheduling';
 
 const WEEKDAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -59,10 +61,22 @@ const inputClass =
 type Tab = 'agendamentos' | 'horarios' | 'dias' | 'servicos';
 
 export default function AdminPanel() {
-  const [logged, setLogged] = useState(isLoggedIn());
+  const [logged, setLogged] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    checkLoggedIn().then(setLogged);
+  }, []);
+
+  if (logged === null) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return logged ? (
-    <Dashboard onLogout={() => { logout(); setLogged(false); }} />
+    <Dashboard onLogout={async () => { await logout(); setLogged(false); }} />
   ) : (
     <LoginScreen onLogin={() => setLogged(true)} />
   );
@@ -74,13 +88,19 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (login(user, password)) {
-      onLogin();
-    } else {
-      setError(true);
+    setSubmitting(true);
+    try {
+      if (await login(user, password)) {
+        onLogin();
+      } else {
+        setError(true);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -106,12 +126,14 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Login</label>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  {usingSupabase ? 'E-mail' : 'Login'}
+                </label>
                 <input
-                  type="text"
+                  type={usingSupabase ? 'email' : 'text'}
                   value={user}
                   onChange={(e) => { setUser(e.target.value); setError(false); }}
-                  placeholder="Seu login"
+                  placeholder={usingSupabase ? 'Seu e-mail' : 'Seu login'}
                   className={`${inputClass} w-full`}
                   autoFocus
                 />
@@ -128,10 +150,11 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               </div>
               {error && (
                 <p className="text-sm text-destructive font-medium">
-                  Login ou senha incorretos.
+                  {usingSupabase ? 'E-mail' : 'Login'} ou senha incorretos.
                 </p>
               )}
-              <Button type="submit" className="w-full" size="lg">
+              <Button type="submit" className="w-full" size="lg" disabled={submitting}>
+                {submitting && <Loader2 className="w-5 h-5 animate-spin" />}
                 Entrar
               </Button>
             </form>
@@ -150,13 +173,18 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
 function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('agendamentos');
-  const [config, setConfig] = useState<ScheduleConfig>(loadConfig());
-  const [appointments, setAppointments] = useState<Appointment[]>(loadAppointments());
+  const [config, setConfig] = useState<ScheduleConfig | null>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
-  const refresh = () => {
-    setConfig(loadConfig());
-    setAppointments(loadAppointments());
-  };
+  const refresh = useCallback(async () => {
+    const [cfg, appts] = await Promise.all([fetchConfig(), fetchAppointments()]);
+    setConfig(cfg);
+    setAppointments(appts);
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const tabs: { id: Tab; label: string; icon: typeof CalendarDays }[] = [
     { id: 'agendamentos', label: 'Agendamentos', icon: CalendarDays },
@@ -203,12 +231,23 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           ))}
         </div>
 
-        {tab === 'agendamentos' && (
-          <AppointmentsTab appointments={appointments} onChange={refresh} />
+        {!config ? (
+          <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            Carregando...
+          </div>
+        ) : (
+          <>
+            {tab === 'agendamentos' && (
+              <AppointmentsTab appointments={appointments} onChange={refresh} />
+            )}
+            {tab === 'horarios' && <SlotsTab config={config} onChange={refresh} />}
+            {tab === 'dias' && (
+              <DaysTab config={config} appointments={appointments} onChange={refresh} />
+            )}
+            {tab === 'servicos' && <ServicesTab config={config} onChange={refresh} />}
+          </>
         )}
-        {tab === 'horarios' && <SlotsTab config={config} onChange={refresh} />}
-        {tab === 'dias' && <DaysTab config={config} onChange={refresh} />}
-        {tab === 'servicos' && <ServicesTab config={config} onChange={refresh} />}
       </div>
     </div>
   );
@@ -235,12 +274,12 @@ function AppointmentsTab({
   const upcoming = sorted.filter((a) => a.date >= today);
   const past = sorted.filter((a) => a.date < today);
 
-  const handleCancel = (a: Appointment) => {
+  const handleCancel = async (a: Appointment) => {
     const ok = window.confirm(
       `Cancelar a consulta de ${a.name} em ${formatDateShortBR(a.date)} às ${a.time}?\nO horário voltará a ficar disponível.`
     );
     if (ok) {
-      cancelAppointment(a.id);
+      await cancelAppointment(a.id);
       onChange();
     }
   };
@@ -366,10 +405,10 @@ const ADVANCE_PRESETS = [
 function MinAdvanceCard({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
   const [custom, setCustom] = useState('');
 
-  const applyCustom = () => {
+  const applyCustom = async () => {
     const hours = Number(custom);
     if (!isNaN(hours) && hours >= 0) {
-      setMinAdvanceHours(hours);
+      await setMinAdvanceHours(hours);
       setCustom('');
       onChange();
     }
@@ -395,7 +434,7 @@ function MinAdvanceCard({ config, onChange }: { config: ScheduleConfig; onChange
             return (
               <button
                 key={preset.hours}
-                onClick={() => { setMinAdvanceHours(preset.hours); onChange(); }}
+                onClick={async () => { await setMinAdvanceHours(preset.hours); onChange(); }}
                 className={`h-11 px-4 rounded-lg text-sm font-medium border transition-colors ${
                   active
                     ? 'bg-primary text-primary-foreground border-primary'
@@ -433,9 +472,9 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newTime) return;
-    addTimeSlot(newTime);
+    await addTimeSlot(newTime);
     setNewTime('');
     onChange();
   };
@@ -445,9 +484,9 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
     setEditValue(time);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editing && editValue) {
-      editTimeSlot(editing, editValue);
+      await editTimeSlot(editing, editValue);
       setEditing(null);
       onChange();
     }
@@ -500,7 +539,7 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button
-                  onClick={() => { removeTimeSlot(time); onChange(); }}
+                  onClick={async () => { await removeTimeSlot(time); onChange(); }}
                   className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
                   aria-label={`Remover ${time}`}
                 >
@@ -544,28 +583,28 @@ function ServicesTab({ config, onChange }: { config: ScheduleConfig; onChange: (
     setEditPrice(String(price));
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     const price = Number(editPrice.replace(',', '.'));
     if (editingId && editName.trim() && !isNaN(price) && price >= 0) {
-      updateService(editingId, editName, price);
+      await updateService(editingId, editName, price);
       setEditingId(null);
       onChange();
     }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const price = Number(newPrice.replace(',', '.'));
     if (newName.trim() && !isNaN(price) && price >= 0) {
-      addService(newName, price);
+      await addService(newName, price);
       setNewName('');
       setNewPrice('');
       onChange();
     }
   };
 
-  const handleRemove = (id: string, name: string) => {
+  const handleRemove = async (id: string, name: string) => {
     if (window.confirm(`Remover o serviço "${name}"?`)) {
-      removeService(id);
+      await removeService(id);
       onChange();
     }
   };
@@ -676,13 +715,20 @@ function ServicesTab({ config, onChange }: { config: ScheduleConfig; onChange: (
 
 // ---------- Aba: Dias ----------
 
-function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
+function DaysTab({
+  config,
+  appointments,
+  onChange,
+}: {
+  config: ScheduleConfig;
+  appointments: Appointment[];
+  onChange: () => void;
+}) {
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [reserveDate, setReserveDate] = useState<string | null>(null);
   const today = toDateStr(new Date());
 
-  const appointments = loadAppointments();
   const bookedTimes = new Set(
     reserveDate ? appointments.filter((a) => a.date === reserveDate).map((a) => a.time) : []
   );
@@ -695,26 +741,26 @@ function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () =>
     .filter((r) => r.date >= today)
     .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
 
-  const toggleWeekday = (day: number) => {
+  const toggleWeekday = async (day: number) => {
     const next = config.weekdays.includes(day)
       ? config.weekdays.filter((d) => d !== day)
       : [...config.weekdays, day].sort();
-    setWeekdays(next);
+    await setWeekdays(next);
     onChange();
   };
 
-  const handleToggleDate = (dateStr: string) => {
+  const handleToggleDate = async (dateStr: string) => {
     if (config.blockedDates.includes(dateStr)) {
-      unblockDate(dateStr);
+      await unblockDate(dateStr);
     } else {
-      blockDate(dateStr);
+      await blockDate(dateStr);
     }
     onChange();
   };
 
-  const handleBlockRange = () => {
+  const handleBlockRange = async () => {
     if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) return;
-    blockDateRange(rangeStart, rangeEnd);
+    await blockDateRange(rangeStart, rangeEnd);
     setRangeStart('');
     setRangeEnd('');
     onChange();
@@ -825,7 +871,7 @@ function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () =>
                       ({WEEKDAY_NAMES[parseDateStr(d).getDay()].slice(0, 3)})
                     </span>
                     <button
-                      onClick={() => { unblockDate(d); onChange(); }}
+                      onClick={async () => { await unblockDate(d); onChange(); }}
                       className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-destructive/20 transition-colors"
                       aria-label={`Desbloquear ${d}`}
                     >
@@ -873,11 +919,11 @@ function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () =>
                       key={time}
                       type="button"
                       disabled={booked}
-                      onClick={() => {
+                      onClick={async () => {
                         if (reserved) {
-                          unreserveSlot(reserveDate, time);
+                          await unreserveSlot(reserveDate, time);
                         } else {
-                          reserveSlot(reserveDate, time);
+                          await reserveSlot(reserveDate, time);
                         }
                         onChange();
                       }}
@@ -916,7 +962,7 @@ function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () =>
                   >
                     {formatDateShortBR(r.date)} às {r.time}
                     <button
-                      onClick={() => { unreserveSlot(r.date, r.time); onChange(); }}
+                      onClick={async () => { await unreserveSlot(r.date, r.time); onChange(); }}
                       className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
                       aria-label={`Liberar ${r.date} ${r.time}`}
                     >

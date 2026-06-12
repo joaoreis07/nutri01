@@ -1,5 +1,11 @@
 // Camada de dados do sistema de agendamento.
-// Persistência via localStorage do navegador.
+//
+// Funciona em dois modos:
+// - Supabase configurado (src/app/lib/supabaseConfig.ts): dados online,
+//   compartilhados entre todos os dispositivos.
+// - Sem Supabase: fallback no localStorage do navegador (modo demonstração).
+
+import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface Appointment {
   id: string;
@@ -41,13 +47,27 @@ export interface ScheduleConfig {
   reservedSlots: ReservedSlot[];
 }
 
+export interface BookedSlot {
+  date: string;
+  time: string;
+}
+
+/** Dados necessários para calcular a disponibilidade pública */
+export interface ScheduleData {
+  config: ScheduleConfig;
+  booked: BookedSlot[];
+}
+
+/** true quando o banco de dados online está em uso */
+export const usingSupabase = isSupabaseConfigured;
+
 const CONFIG_KEY = 'nara_schedule_config';
 const APPOINTMENTS_KEY = 'nara_appointments';
 const SESSION_KEY = 'nara_admin_session';
 
-// Credenciais do painel administrativo
-const ADMIN_USER = 'nara';
-const ADMIN_PASSWORD = 'nara2026';
+// Credenciais do painel no modo local (sem Supabase)
+const LOCAL_ADMIN_USER = 'nara';
+const LOCAL_ADMIN_PASSWORD = 'nara2026';
 
 const DEFAULT_SERVICES: Service[] = [
   { id: 'consulta', name: 'Consulta nutricional com retorno', price: 250 },
@@ -93,41 +113,52 @@ export function formatDateShortBR(s: string): string {
   return d.toLocaleDateString('pt-BR');
 }
 
+export function formatPriceBR(price: number): string {
+  return price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 function todayStr(): string {
   return toDateStr(new Date());
 }
 
-// ---------- Persistência ----------
+function normalizeTime(t: unknown): string {
+  return String(t).slice(0, 5);
+}
 
-export function loadConfig(): ScheduleConfig {
+function normalizeConfig(parsed: any): ScheduleConfig {
+  if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_CONFIG };
+  return {
+    weekdays: Array.isArray(parsed.weekdays) ? parsed.weekdays : DEFAULT_CONFIG.weekdays,
+    timeSlots: Array.isArray(parsed.timeSlots) ? parsed.timeSlots : DEFAULT_CONFIG.timeSlots,
+    blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
+    services:
+      Array.isArray(parsed.services) && parsed.services.length > 0
+        ? parsed.services
+        : DEFAULT_SERVICES,
+    minAdvanceHours:
+      typeof parsed.minAdvanceHours === 'number' && parsed.minAdvanceHours >= 0
+        ? parsed.minAdvanceHours
+        : DEFAULT_CONFIG.minAdvanceHours,
+    reservedSlots: Array.isArray(parsed.reservedSlots) ? parsed.reservedSlots : [],
+  };
+}
+
+// ---------- Persistência local (modo demonstração) ----------
+
+function localLoadConfig(): ScheduleConfig {
   try {
     const raw = localStorage.getItem(CONFIG_KEY);
-    if (!raw) return { ...DEFAULT_CONFIG };
-    const parsed = JSON.parse(raw);
-    return {
-      weekdays: Array.isArray(parsed.weekdays) ? parsed.weekdays : DEFAULT_CONFIG.weekdays,
-      timeSlots: Array.isArray(parsed.timeSlots) ? parsed.timeSlots : DEFAULT_CONFIG.timeSlots,
-      blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
-      services:
-        Array.isArray(parsed.services) && parsed.services.length > 0
-          ? parsed.services
-          : DEFAULT_SERVICES,
-      minAdvanceHours:
-        typeof parsed.minAdvanceHours === 'number' && parsed.minAdvanceHours >= 0
-          ? parsed.minAdvanceHours
-          : DEFAULT_CONFIG.minAdvanceHours,
-      reservedSlots: Array.isArray(parsed.reservedSlots) ? parsed.reservedSlots : [],
-    };
+    return raw ? normalizeConfig(JSON.parse(raw)) : { ...DEFAULT_CONFIG };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
 }
 
-export function saveConfig(config: ScheduleConfig): void {
+function localSaveConfig(config: ScheduleConfig): void {
   localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
-export function loadAppointments(): Appointment[] {
+function localLoadAppointments(): Appointment[] {
   try {
     const raw = localStorage.getItem(APPOINTMENTS_KEY);
     if (!raw) return [];
@@ -138,19 +169,56 @@ export function loadAppointments(): Appointment[] {
   }
 }
 
-function saveAppointments(appointments: Appointment[]): void {
+function localSaveAppointments(appointments: Appointment[]): void {
   localStorage.setItem(APPOINTMENTS_KEY, JSON.stringify(appointments));
 }
 
-// ---------- Disponibilidade ----------
+// ---------- Carregamento de dados ----------
 
-/** O dia está habilitado para atendimento (sem considerar horários já reservados)? */
-export function isDayAvailable(dateStr: string, config?: ScheduleConfig): boolean {
-  const cfg = config ?? loadConfig();
+export async function fetchConfig(): Promise<ScheduleConfig> {
+  if (!supabase) return localLoadConfig();
+  const { data, error } = await supabase
+    .from('site_config')
+    .select('data')
+    .eq('id', 1)
+    .single();
+  if (error || !data) return { ...DEFAULT_CONFIG };
+  return normalizeConfig(data.data);
+}
+
+async function saveConfigData(config: ScheduleConfig): Promise<void> {
+  if (!supabase) {
+    localSaveConfig(config);
+    return;
+  }
+  const { error } = await supabase.from('site_config').update({ data: config }).eq('id', 1);
+  if (error) throw new Error(error.message);
+}
+
+/** Dados públicos: configuração + horários já ocupados (sem dados pessoais). */
+export async function fetchPublicData(): Promise<ScheduleData> {
+  const config = await fetchConfig();
+  let booked: BookedSlot[];
+  if (!supabase) {
+    booked = localLoadAppointments().map((a) => ({ date: a.date, time: a.time }));
+  } else {
+    const { data } = await supabase.rpc('get_booked_slots');
+    booked = (data ?? []).map((r: any) => ({
+      date: String(r.slot_date),
+      time: normalizeTime(r.slot_time),
+    }));
+  }
+  return { config, booked };
+}
+
+// ---------- Disponibilidade (cálculos puros, sem rede) ----------
+
+/** O dia está habilitado para atendimento (sem considerar horários ocupados)? */
+export function isDayAvailable(dateStr: string, config: ScheduleConfig): boolean {
   if (dateStr < todayStr()) return false;
-  if (cfg.blockedDates.includes(dateStr)) return false;
+  if (config.blockedDates.includes(dateStr)) return false;
   const weekday = parseDateStr(dateStr).getDay();
-  return cfg.weekdays.includes(weekday);
+  return config.weekdays.includes(weekday);
 }
 
 /**
@@ -159,22 +227,19 @@ export function isDayAvailable(dateStr: string, config?: ScheduleConfig): boolea
  * - horários reservados pela profissional para uso próprio
  * - horários que não respeitam a antecedência mínima configurada
  */
-export function getAvailableTimes(dateStr: string): string[] {
-  const cfg = loadConfig();
-  if (!isDayAvailable(dateStr, cfg)) return [];
+export function getAvailableTimes(data: ScheduleData, dateStr: string): string[] {
+  const { config, booked } = data;
+  if (!isDayAvailable(dateStr, config)) return [];
 
-  const appointments = loadAppointments();
-  const taken = new Set(
-    appointments.filter((a) => a.date === dateStr).map((a) => a.time)
-  );
+  const taken = new Set(booked.filter((b) => b.date === dateStr).map((b) => b.time));
   const reserved = new Set(
-    cfg.reservedSlots.filter((r) => r.date === dateStr).map((r) => r.time)
+    config.reservedSlots.filter((r) => r.date === dateStr).map((r) => r.time)
   );
 
   // Momento mais cedo permitido para agendar (agora + antecedência mínima)
-  const earliest = new Date(Date.now() + cfg.minAdvanceHours * 60 * 60 * 1000);
+  const earliest = new Date(Date.now() + config.minAdvanceHours * 60 * 60 * 1000);
 
-  const slots = cfg.timeSlots.filter((t) => {
+  const slots = config.timeSlots.filter((t) => {
     if (taken.has(t) || reserved.has(t)) return false;
     const [h, m] = t.split(':').map(Number);
     const slotDateTime = parseDateStr(dateStr);
@@ -186,17 +251,16 @@ export function getAvailableTimes(dateStr: string): string[] {
 }
 
 /** O dia tem pelo menos um horário livre? */
-export function dayHasFreeSlots(dateStr: string): boolean {
-  return getAvailableTimes(dateStr).length > 0;
+export function dayHasFreeSlots(data: ScheduleData, dateStr: string): boolean {
+  return getAvailableTimes(data, dateStr).length > 0;
 }
 
 // ---------- Agendamentos ----------
 
-export function formatPriceBR(price: number): string {
-  return price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+const SLOT_TAKEN_ERROR =
+  'Este horário acabou de ser reservado. Por favor, escolha outro horário.';
 
-export function bookAppointment(data: {
+export async function bookAppointment(input: {
   name: string;
   whatsapp: string;
   email: string;
@@ -205,170 +269,217 @@ export function bookAppointment(data: {
   price: number;
   date: string;
   time: string;
-}): { success: boolean; error?: string } {
+}): Promise<{ success: boolean; error?: string }> {
   // Revalida disponibilidade no momento da confirmação
-  const available = getAvailableTimes(data.date);
-  if (!available.includes(data.time)) {
-    return {
-      success: false,
-      error: 'Este horário acabou de ser reservado. Por favor, escolha outro horário.',
-    };
+  const data = await fetchPublicData();
+  if (!getAvailableTimes(data, input.date).includes(input.time)) {
+    return { success: false, error: SLOT_TAKEN_ERROR };
   }
 
-  const appointments = loadAppointments();
-  appointments.push({
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    name: data.name.trim(),
-    whatsapp: data.whatsapp.trim(),
-    email: data.email.trim(),
-    objective: data.objective.trim(),
-    service: data.service,
-    price: data.price,
-    date: data.date,
-    time: data.time,
-    createdAt: new Date().toISOString(),
+  if (!supabase) {
+    const appointments = localLoadAppointments();
+    appointments.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: input.name.trim(),
+      whatsapp: input.whatsapp.trim(),
+      email: input.email.trim(),
+      objective: input.objective.trim(),
+      service: input.service,
+      price: input.price,
+      date: input.date,
+      time: input.time,
+      createdAt: new Date().toISOString(),
+    });
+    localSaveAppointments(appointments);
+    return { success: true };
+  }
+
+  const { error } = await supabase.from('appointments').insert({
+    name: input.name.trim(),
+    whatsapp: input.whatsapp.trim(),
+    email: input.email.trim(),
+    objective: input.objective.trim(),
+    service: input.service,
+    price: input.price,
+    date: input.date,
+    time: input.time,
   });
-  saveAppointments(appointments);
+
+  if (error) {
+    // 23505 = violação de chave única (duas pessoas tentaram o mesmo horário)
+    if (error.code === '23505') return { success: false, error: SLOT_TAKEN_ERROR };
+    return { success: false, error: 'Não foi possível agendar. Tente novamente.' };
+  }
   return { success: true };
 }
 
-export function cancelAppointment(id: string): void {
-  const appointments = loadAppointments().filter((a) => a.id !== id);
-  saveAppointments(appointments);
+/** Lista completa de agendamentos (somente painel admin). */
+export async function fetchAppointments(): Promise<Appointment[]> {
+  if (!supabase) return localLoadAppointments();
+  const { data, error } = await supabase
+    .from('appointments')
+    .select('*')
+    .order('date', { ascending: true })
+    .order('time', { ascending: true });
+  if (error || !data) return [];
+  return data.map((r: any) => ({
+    id: String(r.id),
+    name: r.name,
+    whatsapp: r.whatsapp,
+    email: r.email,
+    objective: r.objective,
+    service: r.service ?? undefined,
+    price: r.price != null ? Number(r.price) : undefined,
+    date: String(r.date),
+    time: normalizeTime(r.time),
+    createdAt: r.created_at,
+  }));
 }
 
-// ---------- Gerenciamento (admin) ----------
-
-export function addTimeSlot(time: string): ScheduleConfig {
-  const cfg = loadConfig();
-  if (time && !cfg.timeSlots.includes(time)) {
-    cfg.timeSlots = [...cfg.timeSlots, time].sort();
-    saveConfig(cfg);
+export async function cancelAppointment(id: string): Promise<void> {
+  if (!supabase) {
+    localSaveAppointments(localLoadAppointments().filter((a) => a.id !== id));
+    return;
   }
-  return cfg;
+  await supabase.from('appointments').delete().eq('id', id);
 }
 
-export function removeTimeSlot(time: string): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.timeSlots = cfg.timeSlots.filter((t) => t !== time);
-  saveConfig(cfg);
-  return cfg;
+// ---------- Mutações de configuração (admin) ----------
+
+async function mutateConfig(
+  mutator: (cfg: ScheduleConfig) => ScheduleConfig
+): Promise<ScheduleConfig> {
+  const cfg = await fetchConfig();
+  const next = mutator(cfg);
+  await saveConfigData(next);
+  return next;
 }
 
-export function editTimeSlot(oldTime: string, newTime: string): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.timeSlots = cfg.timeSlots
-    .map((t) => (t === oldTime ? newTime : t))
-    .filter((t, i, arr) => arr.indexOf(t) === i)
-    .sort();
-  saveConfig(cfg);
-  return cfg;
+export function addTimeSlot(time: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    timeSlots: cfg.timeSlots.includes(time) ? cfg.timeSlots : [...cfg.timeSlots, time].sort(),
+  }));
 }
 
-export function setWeekdays(weekdays: number[]): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.weekdays = weekdays;
-  saveConfig(cfg);
-  return cfg;
+export function removeTimeSlot(time: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    timeSlots: cfg.timeSlots.filter((t) => t !== time),
+  }));
 }
 
-export function blockDate(dateStr: string): ScheduleConfig {
-  const cfg = loadConfig();
-  if (!cfg.blockedDates.includes(dateStr)) {
-    cfg.blockedDates = [...cfg.blockedDates, dateStr].sort();
-    saveConfig(cfg);
-  }
-  return cfg;
+export function editTimeSlot(oldTime: string, newTime: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    timeSlots: cfg.timeSlots
+      .map((t) => (t === oldTime ? newTime : t))
+      .filter((t, i, arr) => arr.indexOf(t) === i)
+      .sort(),
+  }));
 }
 
-export function unblockDate(dateStr: string): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.blockedDates = cfg.blockedDates.filter((d) => d !== dateStr);
-  saveConfig(cfg);
-  return cfg;
+export function setWeekdays(weekdays: number[]): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({ ...cfg, weekdays }));
+}
+
+export function blockDate(dateStr: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    blockedDates: cfg.blockedDates.includes(dateStr)
+      ? cfg.blockedDates
+      : [...cfg.blockedDates, dateStr].sort(),
+  }));
+}
+
+export function unblockDate(dateStr: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    blockedDates: cfg.blockedDates.filter((d) => d !== dateStr),
+  }));
 }
 
 /** Bloqueia um período inteiro (férias). */
-export function blockDateRange(startStr: string, endStr: string): ScheduleConfig {
-  const cfg = loadConfig();
-  const start = parseDateStr(startStr);
-  const end = parseDateStr(endStr);
-  const blocked = new Set(cfg.blockedDates);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    blocked.add(toDateStr(d));
-  }
-  cfg.blockedDates = Array.from(blocked).sort();
-  saveConfig(cfg);
-  return cfg;
+export function blockDateRange(startStr: string, endStr: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => {
+    const blocked = new Set(cfg.blockedDates);
+    const end = parseDateStr(endStr);
+    for (let d = parseDateStr(startStr); d <= end; d.setDate(d.getDate() + 1)) {
+      blocked.add(toDateStr(d));
+    }
+    return { ...cfg, blockedDates: Array.from(blocked).sort() };
+  });
 }
 
-// ---------- Antecedência mínima e horários reservados (admin) ----------
-
-export function setMinAdvanceHours(hours: number): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.minAdvanceHours = Math.max(0, hours);
-  saveConfig(cfg);
-  return cfg;
+export function setMinAdvanceHours(hours: number): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({ ...cfg, minAdvanceHours: Math.max(0, hours) }));
 }
 
-export function reserveSlot(date: string, time: string): ScheduleConfig {
-  const cfg = loadConfig();
-  if (!cfg.reservedSlots.some((r) => r.date === date && r.time === time)) {
-    cfg.reservedSlots = [...cfg.reservedSlots, { date, time }];
-    saveConfig(cfg);
-  }
-  return cfg;
+export function reserveSlot(date: string, time: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    reservedSlots: cfg.reservedSlots.some((r) => r.date === date && r.time === time)
+      ? cfg.reservedSlots
+      : [...cfg.reservedSlots, { date, time }],
+  }));
 }
 
-export function unreserveSlot(date: string, time: string): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.reservedSlots = cfg.reservedSlots.filter(
-    (r) => !(r.date === date && r.time === time)
-  );
-  saveConfig(cfg);
-  return cfg;
+export function unreserveSlot(date: string, time: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    reservedSlots: cfg.reservedSlots.filter((r) => !(r.date === date && r.time === time)),
+  }));
 }
 
-// ---------- Serviços (admin) ----------
-
-export function addService(name: string, price: number): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.services = [
-    ...cfg.services,
-    { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: name.trim(), price },
-  ];
-  saveConfig(cfg);
-  return cfg;
+export function addService(name: string, price: number): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    services: [
+      ...cfg.services,
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, name: name.trim(), price },
+    ],
+  }));
 }
 
-export function updateService(id: string, name: string, price: number): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.services = cfg.services.map((s) =>
-    s.id === id ? { ...s, name: name.trim(), price } : s
-  );
-  saveConfig(cfg);
-  return cfg;
+export function updateService(id: string, name: string, price: number): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    services: cfg.services.map((s) => (s.id === id ? { ...s, name: name.trim(), price } : s)),
+  }));
 }
 
-export function removeService(id: string): ScheduleConfig {
-  const cfg = loadConfig();
-  cfg.services = cfg.services.filter((s) => s.id !== id);
-  saveConfig(cfg);
-  return cfg;
+export function removeService(id: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => ({
+    ...cfg,
+    services: cfg.services.filter((s) => s.id !== id),
+  }));
 }
 
 // ---------- Autenticação do painel ----------
 
-export function login(user: string, password: string): boolean {
-  const ok = user.trim().toLowerCase() === ADMIN_USER && password === ADMIN_PASSWORD;
-  if (ok) sessionStorage.setItem(SESSION_KEY, 'ok');
-  return ok;
+export async function login(user: string, password: string): Promise<boolean> {
+  if (!supabase) {
+    const ok = user.trim().toLowerCase() === LOCAL_ADMIN_USER && password === LOCAL_ADMIN_PASSWORD;
+    if (ok) sessionStorage.setItem(SESSION_KEY, 'ok');
+    return ok;
+  }
+  const { error } = await supabase.auth.signInWithPassword({
+    email: user.trim(),
+    password,
+  });
+  return !error;
 }
 
-export function logout(): void {
-  sessionStorage.removeItem(SESSION_KEY);
+export async function logout(): Promise<void> {
+  if (!supabase) {
+    sessionStorage.removeItem(SESSION_KEY);
+    return;
+  }
+  await supabase.auth.signOut();
 }
 
-export function isLoggedIn(): boolean {
-  return sessionStorage.getItem(SESSION_KEY) === 'ok';
+export async function checkLoggedIn(): Promise<boolean> {
+  if (!supabase) return sessionStorage.getItem(SESSION_KEY) === 'ok';
+  const { data } = await supabase.auth.getSession();
+  return data.session !== null;
 }

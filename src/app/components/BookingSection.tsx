@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, CheckCircle2, Clock, MessageCircle, Sparkles } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, Loader2, MessageCircle, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { Card, CardContent } from './Card';
 import { Calendar } from './Calendar';
 import {
+  ScheduleData,
   bookAppointment,
   dayHasFreeSlots,
+  fetchPublicData,
   formatDateBR,
   formatPriceBR,
   getAvailableTimes,
-  loadConfig,
 } from '../lib/scheduling';
 
 const fadeInUp = {
@@ -24,37 +25,44 @@ const inputClass =
   'w-full h-12 px-4 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
 export function BookingSection() {
+  const [data, setData] = useState<ScheduleData | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [form, setForm] = useState({ name: '', whatsapp: '', email: '', objective: '' });
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<{ date: string; time: string; service: string; price: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const services = loadConfig().services;
-  const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
-
-  const refreshTimes = useCallback((date: string | null) => {
-    setAvailableTimes(date ? getAvailableTimes(date) : []);
+  const refresh = useCallback(async () => {
+    try {
+      setData(await fetchPublicData());
+      setRefreshKey((k) => k + 1);
+    } catch {
+      // mantém os dados anteriores em caso de falha de rede
+    }
   }, []);
 
-  // Atualiza disponibilidade se os dados mudarem em outra aba (ex.: painel admin aberto)
   useEffect(() => {
-    const onStorage = () => {
-      setRefreshKey((k) => k + 1);
-      refreshTimes(selectedDate);
-    };
+    refresh();
+  }, [refresh]);
+
+  // Atualiza disponibilidade se os dados mudarem em outra aba (modo local)
+  useEffect(() => {
+    const onStorage = () => refresh();
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
-  }, [selectedDate, refreshTimes]);
+  }, [refresh]);
+
+  const services = data?.config.services ?? [];
+  const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
+  const availableTimes = data && selectedDate ? getAvailableTimes(data, selectedDate) : [];
 
   const handleSelectDate = (date: string) => {
     setSelectedDate(date);
     setSelectedTime(null);
     setError(null);
-    refreshTimes(date);
   };
 
   const updateForm = (field: keyof typeof form, value: string) => {
@@ -67,40 +75,46 @@ export function BookingSection() {
     /\S+@\S+\.\S+/.test(form.email) &&
     form.objective.trim().length > 0;
 
-  const canConfirm = formValid && selectedDate !== null && selectedTime !== null && selectedService !== null;
+  const canConfirm =
+    formValid && selectedDate !== null && selectedTime !== null && selectedService !== null && !submitting;
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!selectedDate || !selectedTime || !selectedService) return;
     setError(null);
-    const result = bookAppointment({
-      ...form,
-      service: selectedService.name,
-      price: selectedService.price,
-      date: selectedDate,
-      time: selectedTime,
-    });
-    if (result.success) {
-      setConfirmed({
-        date: selectedDate,
-        time: selectedTime,
+    setSubmitting(true);
+    try {
+      const result = await bookAppointment({
+        ...form,
         service: selectedService.name,
         price: selectedService.price,
+        date: selectedDate,
+        time: selectedTime,
       });
-    } else {
-      setError(result.error ?? 'Não foi possível agendar. Tente novamente.');
-      setSelectedTime(null);
-      refreshTimes(selectedDate);
+      if (result.success) {
+        setConfirmed({
+          date: selectedDate,
+          time: selectedTime,
+          service: selectedService.name,
+          price: selectedService.price,
+        });
+      } else {
+        setError(result.error ?? 'Não foi possível agendar. Tente novamente.');
+        setSelectedTime(null);
+        await refresh();
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  const resetBooking = () => {
+  const resetBooking = async () => {
     setConfirmed(null);
     setForm({ name: '', whatsapp: '', email: '', objective: '' });
     setSelectedDate(null);
     setSelectedTime(null);
     setSelectedServiceId(null);
     setError(null);
-    setRefreshKey((k) => k + 1);
+    await refresh();
   };
 
   return (
@@ -116,7 +130,12 @@ export function BookingSection() {
         <motion.div {...fadeInUp} className="max-w-5xl mx-auto">
           <Card className="hover:translate-y-0">
             <CardContent className="p-6 md:p-10">
-              {confirmed ? (
+              {!data ? (
+                <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  Carregando horários disponíveis...
+                </div>
+              ) : confirmed ? (
                 <div className="text-center py-12 space-y-6">
                   <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-12 h-12 text-primary" />
@@ -241,7 +260,7 @@ export function BookingSection() {
 
                     <Calendar
                       key={refreshKey}
-                      isDayEnabled={dayHasFreeSlots}
+                      isDayEnabled={(d) => dayHasFreeSlots(data, d)}
                       selectedDate={selectedDate}
                       onSelectDate={handleSelectDate}
                     />
@@ -297,10 +316,14 @@ export function BookingSection() {
                       disabled={!canConfirm}
                       onClick={handleConfirm}
                     >
-                      <CheckCircle2 className="w-5 h-5" />
-                      Confirmar Agendamento
+                      {submitting ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5" />
+                      )}
+                      {submitting ? 'Confirmando...' : 'Confirmar Agendamento'}
                     </Button>
-                    {!canConfirm && (
+                    {!canConfirm && !submitting && (
                       <p className="text-xs text-muted-foreground text-center">
                         Escolha o serviço, preencha seus dados e selecione data e horário para confirmar.
                       </p>
