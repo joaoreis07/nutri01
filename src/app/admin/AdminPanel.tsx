@@ -30,8 +30,10 @@ import {
   blockDateRange,
   cancelAppointment,
   editTimeSlot,
+  formatDateBR,
   formatDateShortBR,
   formatPriceBR,
+  isDayAvailable,
   isLoggedIn,
   loadAppointments,
   loadConfig,
@@ -40,9 +42,12 @@ import {
   parseDateStr,
   removeService,
   removeTimeSlot,
+  reserveSlot,
+  setMinAdvanceHours,
   setWeekdays,
   toDateStr,
   unblockDate,
+  unreserveSlot,
   updateService,
 } from '../lib/scheduling';
 
@@ -349,6 +354,80 @@ function AppointmentCard({
 
 // ---------- Aba: Horários ----------
 
+const ADVANCE_PRESETS = [
+  { hours: 0, label: 'Sem antecedência' },
+  { hours: 6, label: '6 horas' },
+  { hours: 12, label: '12 horas' },
+  { hours: 24, label: '24 horas' },
+  { hours: 48, label: '48 horas' },
+  { hours: 72, label: '72 horas' },
+];
+
+function MinAdvanceCard({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
+  const [custom, setCustom] = useState('');
+
+  const applyCustom = () => {
+    const hours = Number(custom);
+    if (!isNaN(hours) && hours >= 0) {
+      setMinAdvanceHours(hours);
+      setCustom('');
+      onChange();
+    }
+  };
+
+  return (
+    <Card className="hover:translate-y-0">
+      <CardHeader>
+        <CardTitle className="text-xl flex items-center gap-2">
+          <Clock className="w-5 h-5 text-primary" />
+          Antecedência mínima para agendar
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Impede agendamentos de última hora. Com {config.minAdvanceHours}h de antecedência, um
+          horário só aparece para o paciente se ainda faltarem pelo menos {config.minAdvanceHours}{' '}
+          horas para ele.
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {ADVANCE_PRESETS.map((preset) => {
+            const active = config.minAdvanceHours === preset.hours;
+            return (
+              <button
+                key={preset.hours}
+                onClick={() => { setMinAdvanceHours(preset.hours); onChange(); }}
+                className={`h-11 px-4 rounded-lg text-sm font-medium border transition-colors ${
+                  active
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'bg-background text-muted-foreground border-border hover:border-primary hover:text-primary'
+                }`}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
+        {!ADVANCE_PRESETS.some((p) => p.hours === config.minAdvanceHours) && (
+          <p className="text-sm font-medium text-primary">
+            Valor personalizado em uso: {config.minAdvanceHours} horas
+          </p>
+        )}
+        <div className="flex items-center gap-2 pt-2 border-t border-border">
+          <input
+            type="number"
+            min="0"
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            placeholder="Outro valor (horas)"
+            className={`${inputClass} w-44`}
+          />
+          <Button onClick={applyCustom} disabled={custom === ''}>Aplicar</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
   const [newTime, setNewTime] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
@@ -375,6 +454,8 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
   };
 
   return (
+    <div className="space-y-6">
+    <MinAdvanceCard config={config} onChange={onChange} />
     <Card className="hover:translate-y-0">
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
@@ -444,6 +525,7 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }
 
@@ -597,7 +679,21 @@ function ServicesTab({ config, onChange }: { config: ScheduleConfig; onChange: (
 function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
+  const [reserveDate, setReserveDate] = useState<string | null>(null);
   const today = toDateStr(new Date());
+
+  const appointments = loadAppointments();
+  const bookedTimes = new Set(
+    reserveDate ? appointments.filter((a) => a.date === reserveDate).map((a) => a.time) : []
+  );
+  const reservedTimes = new Set(
+    reserveDate
+      ? config.reservedSlots.filter((r) => r.date === reserveDate).map((r) => r.time)
+      : []
+  );
+  const futureReserved = config.reservedSlots
+    .filter((r) => r.date >= today)
+    .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
 
   const toggleWeekday = (day: number) => {
     const next = config.weekdays.includes(day)
@@ -732,6 +828,97 @@ function DaysTab({ config, onChange }: { config: ScheduleConfig; onChange: () =>
                       onClick={() => { unblockDate(d); onChange(); }}
                       className="w-7 h-7 rounded-md flex items-center justify-center hover:bg-destructive/20 transition-colors"
                       aria-label={`Desbloquear ${d}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="hover:translate-y-0">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center gap-2">
+            <Lock className="w-5 h-5 text-primary" />
+            Reservar horários para uso próprio
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Escolha um dia e clique nos horários que deseja reservar para você (compromissos
+            pessoais, estudos etc.). Horários reservados não aparecem para os pacientes.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="max-w-sm">
+            <Calendar
+              isDayEnabled={(d) => isDayAvailable(d, config)}
+              selectedDate={reserveDate}
+              onSelectDate={(d) => setReserveDate(reserveDate === d ? null : d)}
+            />
+          </div>
+
+          {reserveDate && (
+            <div className="space-y-3">
+              <div className="font-medium text-foreground capitalize">
+                {formatDateBR(reserveDate)}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {config.timeSlots.map((time) => {
+                  const booked = bookedTimes.has(time);
+                  const reserved = reservedTimes.has(time);
+                  return (
+                    <button
+                      key={time}
+                      type="button"
+                      disabled={booked}
+                      onClick={() => {
+                        if (reserved) {
+                          unreserveSlot(reserveDate, time);
+                        } else {
+                          reserveSlot(reserveDate, time);
+                        }
+                        onChange();
+                      }}
+                      className={`h-11 rounded-lg border text-sm font-medium transition-colors ${
+                        booked
+                          ? 'border-border bg-muted text-muted-foreground/60 cursor-not-allowed'
+                          : reserved
+                            ? 'bg-primary text-primary-foreground border-primary'
+                            : 'border-border text-foreground hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {time}
+                      {booked && <span className="block text-[10px] leading-tight">agendado</span>}
+                      {reserved && <span className="block text-[10px] leading-tight">reservado</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Clique para reservar ou liberar. Horários marcados como "agendado" já têm consulta
+                de paciente.
+              </p>
+            </div>
+          )}
+
+          {futureReserved.length > 0 && (
+            <div className="pt-6 border-t border-border space-y-3">
+              <div className="font-medium text-foreground">
+                Horários reservados ({futureReserved.length})
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {futureReserved.map((r) => (
+                  <div
+                    key={`${r.date}-${r.time}`}
+                    className="flex items-center gap-1 bg-primary/10 text-foreground rounded-lg pl-3 pr-1 h-9 text-sm font-medium"
+                  >
+                    {formatDateShortBR(r.date)} às {r.time}
+                    <button
+                      onClick={() => { unreserveSlot(r.date, r.time); onChange(); }}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                      aria-label={`Liberar ${r.date} ${r.time}`}
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>

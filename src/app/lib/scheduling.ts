@@ -21,6 +21,11 @@ export interface Service {
   price: number;
 }
 
+export interface ReservedSlot {
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+}
+
 export interface ScheduleConfig {
   /** Dias da semana em que há atendimento (0 = domingo ... 6 = sábado) */
   weekdays: number[];
@@ -30,6 +35,10 @@ export interface ScheduleConfig {
   blockedDates: string[];
   /** Serviços oferecidos, com valores */
   services: Service[];
+  /** Antecedência mínima (em horas) exigida para um agendamento */
+  minAdvanceHours: number;
+  /** Horários reservados pela profissional para uso próprio */
+  reservedSlots: ReservedSlot[];
 }
 
 const CONFIG_KEY = 'nara_schedule_config';
@@ -51,6 +60,8 @@ const DEFAULT_CONFIG: ScheduleConfig = {
   timeSlots: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00'],
   blockedDates: [],
   services: DEFAULT_SERVICES,
+  minAdvanceHours: 24,
+  reservedSlots: [],
 };
 
 // ---------- Utilitários de data ----------
@@ -101,6 +112,11 @@ export function loadConfig(): ScheduleConfig {
         Array.isArray(parsed.services) && parsed.services.length > 0
           ? parsed.services
           : DEFAULT_SERVICES,
+      minAdvanceHours:
+        typeof parsed.minAdvanceHours === 'number' && parsed.minAdvanceHours >= 0
+          ? parsed.minAdvanceHours
+          : DEFAULT_CONFIG.minAdvanceHours,
+      reservedSlots: Array.isArray(parsed.reservedSlots) ? parsed.reservedSlots : [],
     };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -137,7 +153,12 @@ export function isDayAvailable(dateStr: string, config?: ScheduleConfig): boolea
   return cfg.weekdays.includes(weekday);
 }
 
-/** Horários livres de um dia (já removendo os reservados e, se for hoje, os que já passaram). */
+/**
+ * Horários livres de um dia, já removendo:
+ * - horários agendados por pacientes
+ * - horários reservados pela profissional para uso próprio
+ * - horários que não respeitam a antecedência mínima configurada
+ */
 export function getAvailableTimes(dateStr: string): string[] {
   const cfg = loadConfig();
   if (!isDayAvailable(dateStr, cfg)) return [];
@@ -146,17 +167,20 @@ export function getAvailableTimes(dateStr: string): string[] {
   const taken = new Set(
     appointments.filter((a) => a.date === dateStr).map((a) => a.time)
   );
+  const reserved = new Set(
+    cfg.reservedSlots.filter((r) => r.date === dateStr).map((r) => r.time)
+  );
 
-  let slots = cfg.timeSlots.filter((t) => !taken.has(t));
+  // Momento mais cedo permitido para agendar (agora + antecedência mínima)
+  const earliest = new Date(Date.now() + cfg.minAdvanceHours * 60 * 60 * 1000);
 
-  if (dateStr === todayStr()) {
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    slots = slots.filter((t) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m > nowMinutes;
-    });
-  }
+  const slots = cfg.timeSlots.filter((t) => {
+    if (taken.has(t) || reserved.has(t)) return false;
+    const [h, m] = t.split(':').map(Number);
+    const slotDateTime = parseDateStr(dateStr);
+    slotDateTime.setHours(h, m, 0, 0);
+    return slotDateTime > earliest;
+  });
 
   return slots.sort();
 }
@@ -274,6 +298,33 @@ export function blockDateRange(startStr: string, endStr: string): ScheduleConfig
     blocked.add(toDateStr(d));
   }
   cfg.blockedDates = Array.from(blocked).sort();
+  saveConfig(cfg);
+  return cfg;
+}
+
+// ---------- Antecedência mínima e horários reservados (admin) ----------
+
+export function setMinAdvanceHours(hours: number): ScheduleConfig {
+  const cfg = loadConfig();
+  cfg.minAdvanceHours = Math.max(0, hours);
+  saveConfig(cfg);
+  return cfg;
+}
+
+export function reserveSlot(date: string, time: string): ScheduleConfig {
+  const cfg = loadConfig();
+  if (!cfg.reservedSlots.some((r) => r.date === date && r.time === time)) {
+    cfg.reservedSlots = [...cfg.reservedSlots, { date, time }];
+    saveConfig(cfg);
+  }
+  return cfg;
+}
+
+export function unreserveSlot(date: string, time: string): ScheduleConfig {
+  const cfg = loadConfig();
+  cfg.reservedSlots = cfg.reservedSlots.filter(
+    (r) => !(r.date === date && r.time === time)
+  );
   saveConfig(cfg);
   return cfg;
 }
