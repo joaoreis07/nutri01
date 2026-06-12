@@ -123,7 +123,7 @@ export function BookingSection() {
         <motion.div {...fadeInUp} className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4 text-foreground">Agendar Consulta</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Escolha o melhor dia e horário para você. Rápido, fácil e sem compromisso.
+            Escolha o melhor dia e horário para você. Rápido e fácil.
           </p>
         </motion.div>
 
