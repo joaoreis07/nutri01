@@ -5,6 +5,8 @@ import {
   CalendarOff,
   CheckCircle2,
   Clock,
+  Eye,
+  EyeOff,
   Loader2,
   Lock,
   LogOut,
@@ -87,6 +89,7 @@ export default function AdminPanel() {
 function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -140,13 +143,23 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">Senha</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => { setPassword(e.target.value); setError(false); }}
-                  placeholder="Sua senha"
-                  className={`${inputClass} w-full`}
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                    placeholder="Sua senha"
+                    className={`${inputClass} w-full pr-12`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 w-9 h-9 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
               </div>
               {error && (
                 <p className="text-sm text-destructive font-medium">
