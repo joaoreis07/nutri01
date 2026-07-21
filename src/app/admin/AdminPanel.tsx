@@ -52,7 +52,6 @@ import {
   unblockDate,
   unreserveSlot,
   updateService,
-  usingSupabase,
 } from '../lib/scheduling';
 
 const WEEKDAY_NAMES = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
@@ -130,15 +129,16 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
-                  {usingSupabase ? 'E-mail' : 'Login'}
+                  E-mail
                 </label>
                 <input
-                  type={usingSupabase ? 'email' : 'text'}
+                  type="email"
                   value={user}
                   onChange={(e) => { setUser(e.target.value); setError(false); }}
-                  placeholder={usingSupabase ? 'Seu e-mail' : 'Seu login'}
+                  placeholder="Seu e-mail"
                   className={`${inputClass} w-full`}
                   autoFocus
+                  autoComplete="username"
                 />
               </div>
               <div>
@@ -150,6 +150,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
                     onChange={(e) => { setPassword(e.target.value); setError(false); }}
                     placeholder="Sua senha"
                     className={`${inputClass} w-full pr-12`}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -163,7 +164,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
               </div>
               {error && (
                 <p className="text-sm text-destructive font-medium">
-                  {usingSupabase ? 'E-mail' : 'Login'} ou senha incorretos.
+                  E-mail ou senha incorretos.
                 </p>
               )}
               <Button type="submit" className="w-full" size="lg" disabled={submitting}>

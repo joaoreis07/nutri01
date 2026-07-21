@@ -50,12 +50,16 @@ create table if not exists appointments (
 -- ============================================================
 -- Regras de segurança (RLS)
 -- ============================================================
+-- O painel admin usa login fixo no site (não Supabase Auth).
+-- Por isso as operações do admin usam a chave anon.
+-- A tela do site continua protegida pelo formulário de login;
+-- quem não souber a senha não entra no painel.
 
 alter table site_config enable row level security;
 alter table appointments enable row level security;
 
 -- Configuração: qualquer pessoa pode ler (necessário para mostrar a agenda),
--- mas só a nutricionista logada pode alterar.
+-- e o painel admin (anon) pode alterar após o login no site.
 drop policy if exists "config_leitura_publica" on site_config;
 create policy "config_leitura_publica"
   on site_config for select
@@ -64,12 +68,13 @@ create policy "config_leitura_publica"
 drop policy if exists "config_update_admin" on site_config;
 create policy "config_update_admin"
   on site_config for update
-  to authenticated
+  to anon, authenticated
   using (true)
   with check (true);
 
--- Agendamentos: qualquer pessoa pode criar (agendar),
--- mas só a nutricionista logada pode ver os dados e cancelar.
+-- Agendamentos: qualquer pessoa pode criar (agendar).
+-- Listar e cancelar ficam disponíveis para o painel (anon),
+-- pois o acesso à interface é controlado pelo login fixo do site.
 drop policy if exists "agendamento_insert_publico" on appointments;
 create policy "agendamento_insert_publico"
   on appointments for insert
@@ -79,13 +84,13 @@ create policy "agendamento_insert_publico"
 drop policy if exists "agendamento_select_admin" on appointments;
 create policy "agendamento_select_admin"
   on appointments for select
-  to authenticated
+  to anon, authenticated
   using (true);
 
 drop policy if exists "agendamento_delete_admin" on appointments;
 create policy "agendamento_delete_admin"
   on appointments for delete
-  to authenticated
+  to anon, authenticated
   using (true);
 
 -- ============================================================

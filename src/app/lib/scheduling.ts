@@ -4,6 +4,8 @@
 // - Supabase configurado (src/app/lib/supabaseConfig.ts): dados online,
 //   compartilhados entre todos os dispositivos.
 // - Sem Supabase: fallback no localStorage do navegador (modo demonstração).
+//
+// O login do painel admin é sempre fixo no código (não usa Supabase Auth).
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
@@ -65,9 +67,10 @@ const CONFIG_KEY = 'nara_schedule_config';
 const APPOINTMENTS_KEY = 'nara_appointments';
 const SESSION_KEY = 'nara_admin_session';
 
-// Credenciais do painel no modo local (sem Supabase)
-const LOCAL_ADMIN_USER = 'nara';
-const LOCAL_ADMIN_PASSWORD = 'nara2026';
+// Credenciais fixas do painel admin (independente do Supabase Auth).
+// O Supabase, quando configurado, guarda só os dados — não o login.
+const ADMIN_EMAIL = 'naraorossetto@gmail.com';
+const ADMIN_PASSWORD = '#/admin';
 
 const DEFAULT_SERVICES: Service[] = [
   { id: 'consulta', name: 'Consulta nutricional com retorno', price: 250 },
@@ -456,30 +459,19 @@ export function removeService(id: string): Promise<ScheduleConfig> {
 }
 
 // ---------- Autenticação do painel ----------
+// Login fixo no front (não usa Supabase Auth). O Supabase só persiste dados.
 
 export async function login(user: string, password: string): Promise<boolean> {
-  if (!supabase) {
-    const ok = user.trim().toLowerCase() === LOCAL_ADMIN_USER && password === LOCAL_ADMIN_PASSWORD;
-    if (ok) sessionStorage.setItem(SESSION_KEY, 'ok');
-    return ok;
-  }
-  const { error } = await supabase.auth.signInWithPassword({
-    email: user.trim(),
-    password,
-  });
-  return !error;
+  const ok =
+    user.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD;
+  if (ok) sessionStorage.setItem(SESSION_KEY, 'ok');
+  return ok;
 }
 
 export async function logout(): Promise<void> {
-  if (!supabase) {
-    sessionStorage.removeItem(SESSION_KEY);
-    return;
-  }
-  await supabase.auth.signOut();
+  sessionStorage.removeItem(SESSION_KEY);
 }
 
 export async function checkLoggedIn(): Promise<boolean> {
-  if (!supabase) return sessionStorage.getItem(SESSION_KEY) === 'ok';
-  const { data } = await supabase.auth.getSession();
-  return data.session !== null;
+  return sessionStorage.getItem(SESSION_KEY) === 'ok';
 }
