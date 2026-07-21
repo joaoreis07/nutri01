@@ -34,11 +34,14 @@ export interface ReservedSlot {
   time: string; // HH:mm
 }
 
+/** Horários por dia da semana (chave 0 = domingo ... 6 = sábado) */
+export type TimeSlotsByWeekday = Record<number, string[]>;
+
 export interface ScheduleConfig {
   /** Dias da semana em que há atendimento (0 = domingo ... 6 = sábado) */
   weekdays: number[];
-  /** Horários de atendimento (HH:mm) */
-  timeSlots: string[];
+  /** Horários de atendimento por dia da semana (HH:mm) */
+  timeSlotsByWeekday: TimeSlotsByWeekday;
   /** Datas específicas bloqueadas (feriados, férias etc.) - YYYY-MM-DD */
   blockedDates: string[];
   /** Serviços oferecidos, com valores */
@@ -78,9 +81,19 @@ const DEFAULT_SERVICES: Service[] = [
   { id: 'avaliacao', name: 'Avaliação física', price: 100 },
 ];
 
+const DEFAULT_WEEKDAY_SLOTS = ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00'];
+
+function buildDefaultTimeSlotsByWeekday(weekdays: number[]): TimeSlotsByWeekday {
+  const result: TimeSlotsByWeekday = {};
+  for (const day of weekdays) {
+    result[day] = [...DEFAULT_WEEKDAY_SLOTS];
+  }
+  return result;
+}
+
 const DEFAULT_CONFIG: ScheduleConfig = {
   weekdays: [1, 2, 3, 4, 5],
-  timeSlots: ['08:00', '09:00', '10:00', '14:00', '15:00', '16:00'],
+  timeSlotsByWeekday: buildDefaultTimeSlotsByWeekday([1, 2, 3, 4, 5]),
   blockedDates: [],
   services: DEFAULT_SERVICES,
   minAdvanceHours: 24,
@@ -128,11 +141,51 @@ function normalizeTime(t: unknown): string {
   return String(t).slice(0, 5);
 }
 
+function normalizeTimeSlotsByWeekday(parsed: any, weekdays: number[]): TimeSlotsByWeekday {
+  if (parsed?.timeSlotsByWeekday && typeof parsed.timeSlotsByWeekday === 'object') {
+    const result: TimeSlotsByWeekday = {};
+    for (const [key, value] of Object.entries(parsed.timeSlotsByWeekday)) {
+      const day = Number(key);
+      if (Number.isInteger(day) && day >= 0 && day <= 6 && Array.isArray(value)) {
+        result[day] = [...new Set(value.map(normalizeTime))].sort();
+      }
+    }
+    return result;
+  }
+
+  // Formato antigo: um único array de horários para todos os dias liberados
+  const legacySlots =
+    Array.isArray(parsed?.timeSlots) && parsed.timeSlots.length > 0
+      ? [...new Set(parsed.timeSlots.map(normalizeTime))].sort()
+      : [...DEFAULT_WEEKDAY_SLOTS];
+  const days = weekdays.length > 0 ? weekdays : DEFAULT_CONFIG.weekdays;
+  return Object.fromEntries(days.map((day: number) => [day, [...legacySlots]]));
+}
+
+/** Horários cadastrados para um dia da semana (0–6). */
+export function getTimeSlotsForWeekday(config: ScheduleConfig, weekday: number): string[] {
+  return config.timeSlotsByWeekday[weekday] ?? [];
+}
+
+/** Horários cadastrados para uma data (YYYY-MM-DD). */
+export function getTimeSlotsForDate(config: ScheduleConfig, dateStr: string): string[] {
+  return getTimeSlotsForWeekday(config, parseDateStr(dateStr).getDay());
+}
+
 function normalizeConfig(parsed: any): ScheduleConfig {
-  if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_CONFIG };
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      ...DEFAULT_CONFIG,
+      timeSlotsByWeekday: buildDefaultTimeSlotsByWeekday(DEFAULT_CONFIG.weekdays),
+      blockedDates: [],
+      reservedSlots: [],
+      services: [...DEFAULT_SERVICES],
+    };
+  }
+  const weekdays = Array.isArray(parsed.weekdays) ? parsed.weekdays : DEFAULT_CONFIG.weekdays;
   return {
-    weekdays: Array.isArray(parsed.weekdays) ? parsed.weekdays : DEFAULT_CONFIG.weekdays,
-    timeSlots: Array.isArray(parsed.timeSlots) ? parsed.timeSlots : DEFAULT_CONFIG.timeSlots,
+    weekdays,
+    timeSlotsByWeekday: normalizeTimeSlotsByWeekday(parsed, weekdays),
     blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
     services:
       Array.isArray(parsed.services) && parsed.services.length > 0
@@ -242,7 +295,7 @@ export function getAvailableTimes(data: ScheduleData, dateStr: string): string[]
   // Momento mais cedo permitido para agendar (agora + antecedência mínima)
   const earliest = new Date(Date.now() + config.minAdvanceHours * 60 * 60 * 1000);
 
-  const slots = config.timeSlots.filter((t) => {
+  const slots = getTimeSlotsForDate(config, dateStr).filter((t) => {
     if (taken.has(t) || reserved.has(t)) return false;
     const [h, m] = t.split(':').map(Number);
     const slotDateTime = parseDateStr(dateStr);
@@ -358,27 +411,43 @@ async function mutateConfig(
   return next;
 }
 
-export function addTimeSlot(time: string): Promise<ScheduleConfig> {
+export function addTimeSlot(weekday: number, time: string): Promise<ScheduleConfig> {
+  return mutateConfig((cfg) => {
+    const current = getTimeSlotsForWeekday(cfg, weekday);
+    return {
+      ...cfg,
+      timeSlotsByWeekday: {
+        ...cfg.timeSlotsByWeekday,
+        [weekday]: current.includes(time) ? current : [...current, time].sort(),
+      },
+    };
+  });
+}
+
+export function removeTimeSlot(weekday: number, time: string): Promise<ScheduleConfig> {
   return mutateConfig((cfg) => ({
     ...cfg,
-    timeSlots: cfg.timeSlots.includes(time) ? cfg.timeSlots : [...cfg.timeSlots, time].sort(),
+    timeSlotsByWeekday: {
+      ...cfg.timeSlotsByWeekday,
+      [weekday]: getTimeSlotsForWeekday(cfg, weekday).filter((t) => t !== time),
+    },
   }));
 }
 
-export function removeTimeSlot(time: string): Promise<ScheduleConfig> {
+export function editTimeSlot(
+  weekday: number,
+  oldTime: string,
+  newTime: string
+): Promise<ScheduleConfig> {
   return mutateConfig((cfg) => ({
     ...cfg,
-    timeSlots: cfg.timeSlots.filter((t) => t !== time),
-  }));
-}
-
-export function editTimeSlot(oldTime: string, newTime: string): Promise<ScheduleConfig> {
-  return mutateConfig((cfg) => ({
-    ...cfg,
-    timeSlots: cfg.timeSlots
-      .map((t) => (t === oldTime ? newTime : t))
-      .filter((t, i, arr) => arr.indexOf(t) === i)
-      .sort(),
+    timeSlotsByWeekday: {
+      ...cfg.timeSlotsByWeekday,
+      [weekday]: getTimeSlotsForWeekday(cfg, weekday)
+        .map((t) => (t === oldTime ? newTime : t))
+        .filter((t, i, arr) => arr.indexOf(t) === i)
+        .sort(),
+    },
   }));
 }
 

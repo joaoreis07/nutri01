@@ -39,6 +39,8 @@ import {
   formatDateBR,
   formatDateShortBR,
   formatPriceBR,
+  getTimeSlotsForDate,
+  getTimeSlotsForWeekday,
   isDayAvailable,
   login,
   logout,
@@ -482,13 +484,24 @@ function MinAdvanceCard({ config, onChange }: { config: ScheduleConfig; onChange
 }
 
 function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () => void }) {
+  const enabledWeekdays = config.weekdays.length > 0 ? config.weekdays : [1];
+  const [selectedDay, setSelectedDay] = useState(enabledWeekdays[0]);
   const [newTime, setNewTime] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
+  useEffect(() => {
+    if (!config.weekdays.includes(selectedDay) && config.weekdays.length > 0) {
+      setSelectedDay(config.weekdays[0]);
+    }
+  }, [config.weekdays, selectedDay]);
+
+  const daySlots = getTimeSlotsForWeekday(config, selectedDay);
+  const dayEnabled = config.weekdays.includes(selectedDay);
+
   const handleAdd = async () => {
     if (!newTime) return;
-    await addTimeSlot(newTime);
+    await addTimeSlot(selectedDay, newTime);
     setNewTime('');
     onChange();
   };
@@ -500,7 +513,7 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
 
   const handleSaveEdit = async () => {
     if (editing && editValue) {
-      await editTimeSlot(editing, editValue);
+      await editTimeSlot(selectedDay, editing, editValue);
       setEditing(null);
       onChange();
     }
@@ -513,55 +526,93 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
           <Clock className="w-5 h-5 text-primary" />
-          Horários de atendimento
+          Horários por dia da semana
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Estes horários valem para todos os dias liberados. Horários já reservados não aparecem
-          para os pacientes.
+          Cada dia pode ter horários diferentes. Escolha o dia e cadastre os horários dele.
         </p>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="flex flex-wrap gap-2">
-          {config.timeSlots.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nenhum horário cadastrado.</p>
-          )}
-          {config.timeSlots.map((time) =>
-            editing === time ? (
-              <div key={time} className="flex items-center gap-1">
-                <input
-                  type="time"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className={inputClass}
-                />
-                <Button size="sm" onClick={handleSaveEdit}>Salvar</Button>
-                <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
-              <div
-                key={time}
-                className="flex items-center gap-1 bg-primary/10 text-foreground rounded-lg pl-4 pr-1 h-11 font-medium"
+          {WEEKDAY_NAMES.map((name, day) => {
+            const active = selectedDay === day;
+            const hasSlots = getTimeSlotsForWeekday(config, day).length > 0;
+            const enabled = config.weekdays.includes(day);
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => { setSelectedDay(day); setEditing(null); }}
+                className={`h-11 px-4 rounded-lg text-sm font-medium border transition-colors ${
+                  active
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : enabled
+                      ? 'bg-background text-foreground border-border hover:border-primary hover:text-primary'
+                      : 'bg-muted/40 text-muted-foreground border-border hover:border-primary/50'
+                }`}
               >
-                {time}
-                <button
-                  onClick={() => handleEdit(time)}
-                  className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
-                  aria-label={`Editar ${time}`}
+                {name}
+                {hasSlots && !active && (
+                  <span className="ml-1.5 text-[10px] opacity-70">({getTimeSlotsForWeekday(config, day).length})</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {!dayEnabled && (
+          <p className="text-sm text-muted-foreground bg-secondary border border-border rounded-lg px-3 py-2">
+            {WEEKDAY_NAMES[selectedDay]} não está marcado como dia de atendimento. Você ainda pode
+            cadastrar horários; para liberar o dia aos pacientes, ative-o na aba Dias.
+          </p>
+        )}
+
+        <div className="space-y-3">
+          <div className="font-medium text-foreground">
+            Horários de {WEEKDAY_NAMES[selectedDay].toLowerCase()}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {daySlots.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum horário cadastrado neste dia.</p>
+            )}
+            {daySlots.map((time) =>
+              editing === time ? (
+                <div key={time} className="flex items-center gap-1">
+                  <input
+                    type="time"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    className={inputClass}
+                  />
+                  <Button size="sm" onClick={handleSaveEdit}>Salvar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  key={time}
+                  className="flex items-center gap-1 bg-primary/10 text-foreground rounded-lg pl-4 pr-1 h-11 font-medium"
                 >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={async () => { await removeTimeSlot(time); onChange(); }}
-                  className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
-                  aria-label={`Remover ${time}`}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )
-          )}
+                  {time}
+                  <button
+                    onClick={() => handleEdit(time)}
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary transition-colors"
+                    aria-label={`Editar ${time}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={async () => { await removeTimeSlot(selectedDay, time); onChange(); }}
+                    className="w-8 h-8 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                    aria-label={`Remover ${time}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 pt-4 border-t border-border">
@@ -573,7 +624,7 @@ function SlotsTab({ config, onChange }: { config: ScheduleConfig; onChange: () =
           />
           <Button onClick={handleAdd} disabled={!newTime}>
             <Plus className="w-4 h-4" />
-            Adicionar horário
+            Adicionar em {WEEKDAY_NAMES[selectedDay].toLowerCase()}
           </Button>
         </div>
       </CardContent>
@@ -925,7 +976,7 @@ function DaysTab({
                 {formatDateBR(reserveDate)}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                {config.timeSlots.map((time) => {
+                {getTimeSlotsForDate(config, reserveDate).map((time) => {
                   const booked = bookedTimes.has(time);
                   const reserved = reservedTimes.has(time);
                   return (
@@ -956,6 +1007,11 @@ function DaysTab({
                   );
                 })}
               </div>
+              {getTimeSlotsForDate(config, reserveDate).length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Nenhum horário cadastrado para este dia da semana. Cadastre na aba Horários.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground">
                 Clique para reservar ou liberar. Horários marcados como "agendado" já têm consulta
                 de paciente.
