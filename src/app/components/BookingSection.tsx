@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, CheckCircle2, Clock, Loader2, MessageCircle, Sparkles } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock, Loader2, MapPin, MessageCircle, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { Card, CardContent } from './Card';
 import { Calendar } from './Calendar';
@@ -24,11 +24,29 @@ const fadeInUp = {
 const inputClass =
   'w-full h-12 px-4 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
+type BookingLocation = 'online' | 'ribeirao-claro' | 'ourinhos';
+
+const BOOKING_LOCATIONS: { id: BookingLocation; label: string }[] = [
+  { id: 'online', label: 'Online' },
+  { id: 'ribeirao-claro', label: 'Ribeirão Claro' },
+  { id: 'ourinhos', label: 'Ourinhos (instituto)' },
+];
+
+const LOCATION_OBJECTIVE_PREFIX: Record<'online' | 'ribeirao-claro', string> = {
+  online: '[Online] ',
+  'ribeirao-claro': '[Ribeirão Claro] ',
+};
+
+const WHATSAPP_NUMBER = '5543988300445';
+const OURINHOS_WHATSAPP_MESSAGE =
+  'Olá! Gostaria de agendar uma consulta no instituto em Ourinhos.';
+
 export function BookingSection() {
   const [data, setData] = useState<ScheduleData | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<BookingLocation | null>(null);
   const [form, setForm] = useState({ name: '', whatsapp: '', email: '', objective: '' });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +83,13 @@ export function BookingSection() {
     setError(null);
   };
 
+  const handleSelectLocation = (location: BookingLocation) => {
+    setSelectedLocation(location);
+    setSelectedDate(null);
+    setSelectedTime(null);
+    setError(null);
+  };
+
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
   };
@@ -76,15 +101,27 @@ export function BookingSection() {
     form.objective.trim().length > 0;
 
   const canConfirm =
-    formValid && selectedDate !== null && selectedTime !== null && selectedService !== null && !submitting;
+    formValid &&
+    selectedLocation !== null &&
+    selectedLocation !== 'ourinhos' &&
+    selectedDate !== null &&
+    selectedTime !== null &&
+    selectedService !== null &&
+    !submitting;
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime || !selectedService) return;
     setError(null);
     setSubmitting(true);
     try {
+      const locationPrefix =
+        selectedLocation === 'online' || selectedLocation === 'ribeirao-claro'
+          ? LOCATION_OBJECTIVE_PREFIX[selectedLocation]
+          : '';
+
       const result = await bookAppointment({
         ...form,
+        objective: locationPrefix + form.objective.trim(),
         service: selectedService.name,
         price: selectedService.price,
         date: selectedDate,
@@ -113,6 +150,7 @@ export function BookingSection() {
     setSelectedDate(null);
     setSelectedTime(null);
     setSelectedServiceId(null);
+    setSelectedLocation(null);
     setError(null);
     await refresh();
   };
@@ -251,81 +289,132 @@ export function BookingSection() {
                     </div>
                   </div>
 
-                  {/* Coluna 2: calendário e horários */}
+                  {/* Coluna 2: local, calendário e horários */}
                   <div className="space-y-6">
-                    <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                      <CalendarDays className="w-5 h-5 text-primary" />
-                      Escolha a data e o horário
-                    </h3>
+                    <div className="space-y-3">
+                      <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                        <MapPin className="w-5 h-5 text-primary" />
+                        Onde deseja o atendimento?
+                      </h3>
+                      <div className="space-y-2">
+                        {BOOKING_LOCATIONS.map((location) => (
+                          <button
+                            key={location.id}
+                            type="button"
+                            onClick={() => handleSelectLocation(location.id)}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                              selectedLocation === location.id
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border hover:border-primary/50'
+                            }`}
+                          >
+                            <span className="text-sm font-medium text-foreground">{location.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
-                    <Calendar
-                      key={refreshKey}
-                      isDayEnabled={(d) => dayHasFreeSlots(data, d)}
-                      selectedDate={selectedDate}
-                      onSelectDate={handleSelectDate}
-                    />
+                    {selectedLocation === 'ourinhos' ? (
+                      <div className="space-y-4 rounded-lg border border-border bg-background p-6">
+                        <p className="text-muted-foreground">
+                          O atendimento em Ourinhos é realizado no instituto e deve ser agendado
+                          diretamente pelo WhatsApp.
+                        </p>
+                        <Button
+                          size="lg"
+                          className="w-full"
+                          onClick={() =>
+                            window.open(
+                              `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(OURINHOS_WHATSAPP_MESSAGE)}`,
+                              '_blank',
+                            )
+                          }
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                          Agendar pelo WhatsApp
+                        </Button>
+                      </div>
+                    ) : selectedLocation ? (
+                      <>
+                        <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
+                          <CalendarDays className="w-5 h-5 text-primary" />
+                          Escolha a data e o horário
+                        </h3>
 
-                    {selectedDate && (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                          <Clock className="w-4 h-4 text-primary" />
-                          Horários disponíveis para{' '}
-                          <span className="capitalize">{formatDateBR(selectedDate)}</span>
-                        </div>
-                        {availableTimes.length > 0 ? (
-                          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                            {availableTimes.map((time) => (
-                              <button
-                                key={time}
-                                type="button"
-                                onClick={() => setSelectedTime(time)}
-                                className={`h-11 rounded-lg border text-sm font-medium transition-colors ${
-                                  selectedTime === time
-                                    ? 'bg-primary text-primary-foreground border-primary'
-                                    : 'border-border text-foreground hover:border-primary hover:text-primary'
-                                }`}
-                              >
-                                {time}
-                              </button>
-                            ))}
+                        <Calendar
+                          key={refreshKey}
+                          isDayEnabled={(d) => dayHasFreeSlots(data, d)}
+                          selectedDate={selectedDate}
+                          onSelectDate={handleSelectDate}
+                        />
+
+                        {selectedDate && (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                              <Clock className="w-4 h-4 text-primary" />
+                              Horários disponíveis para{' '}
+                              <span className="capitalize">{formatDateBR(selectedDate)}</span>
+                            </div>
+                            {availableTimes.length > 0 ? (
+                              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                {availableTimes.map((time) => (
+                                  <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() => setSelectedTime(time)}
+                                    className={`h-11 rounded-lg border text-sm font-medium transition-colors ${
+                                      selectedTime === time
+                                        ? 'bg-primary text-primary-foreground border-primary'
+                                        : 'border-border text-foreground hover:border-primary hover:text-primary'
+                                    }`}
+                                  >
+                                    {time}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-muted-foreground text-sm">
+                                Não há horários disponíveis neste dia.
+                              </p>
+                            )}
                           </div>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">
-                            Não há horários disponíveis neste dia.
+                        )}
+
+                        {error && (
+                          <p className="text-sm text-destructive font-medium">{error}</p>
+                        )}
+
+                        {selectedService && (
+                          <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-primary/5 border border-primary/20">
+                            <span className="text-sm text-foreground">{selectedService.name}</span>
+                            <span className="font-bold text-primary whitespace-nowrap">
+                              {formatPriceBR(selectedService.price)}
+                            </span>
+                          </div>
+                        )}
+
+                        <Button
+                          size="lg"
+                          className="w-full"
+                          disabled={!canConfirm}
+                          onClick={handleConfirm}
+                        >
+                          {submitting ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-5 h-5" />
+                          )}
+                          {submitting ? 'Confirmando...' : 'Confirmar Agendamento'}
+                        </Button>
+                        {!canConfirm && !submitting && (
+                          <p className="text-xs text-muted-foreground text-center">
+                            Escolha o serviço, preencha seus dados e selecione data e horário para confirmar.
                           </p>
                         )}
-                      </div>
-                    )}
-
-                    {error && (
-                      <p className="text-sm text-destructive font-medium">{error}</p>
-                    )}
-
-                    {selectedService && (
-                      <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-primary/5 border border-primary/20">
-                        <span className="text-sm text-foreground">{selectedService.name}</span>
-                        <span className="font-bold text-primary whitespace-nowrap">
-                          {formatPriceBR(selectedService.price)}
-                        </span>
-                      </div>
-                    )}
-
-                    <Button
-                      size="lg"
-                      className="w-full"
-                      disabled={!canConfirm}
-                      onClick={handleConfirm}
-                    >
-                      {submitting ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="w-5 h-5" />
-                      )}
-                      {submitting ? 'Confirmando...' : 'Confirmar Agendamento'}
-                    </Button>
-                    {!canConfirm && !submitting && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Escolha o serviço, preencha seus dados e selecione data e horário para confirmar.
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Selecione onde deseja ser atendido(a) para ver os horários disponíveis.
                       </p>
                     )}
                   </div>
