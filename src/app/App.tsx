@@ -361,7 +361,7 @@ export default function App() {
               { icon: Target, title: "Plano 100% personalizado", description: "Estratégia única baseada nas suas necessidades e objetivos" },
               { icon: MessageCircle, title: "Suporte contínuo", description: "Acompanhamento próximo via WhatsApp durante todo o processo" },
               { icon: Sparkles, title: "Estratégias práticas", description: "Orientações aplicáveis à sua rotina real" },
-              { icon: Activity, title: "Consultas flexíveis", description: "Atendimento online e presencial em Ribeirão Claro-PR" },
+              { icon: Activity, title: "Consultas flexíveis", description: "Atendimento online e presencial em Ribeirão Claro-PR e Ourinhos" },
               { icon: Award, title: "Resultados comprovados", description: "Mais de 300 pacientes transformados" },
             ].map((differential, index) => (
               <motion.div
