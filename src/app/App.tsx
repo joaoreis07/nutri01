@@ -79,8 +79,8 @@ export default function App() {
 
               <div className="grid grid-cols-3 gap-6 pt-8 border-t border-border">
                 <div>
-                  <div className="text-3xl font-bold text-primary">+300</div>
-                  <div className="text-sm text-muted-foreground">Pacientes atendidos</div>
+                  <div className="text-xl sm:text-2xl font-bold text-primary leading-tight">Atendimento</div>
+                  <div className="text-sm text-muted-foreground">Humanizado</div>
                 </div>
                 <div>
                   <div className="text-3xl font-bold text-primary">100%</div>
