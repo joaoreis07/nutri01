@@ -789,10 +789,15 @@ function DaysTab({
   appointments: Appointment[];
   onChange: () => void;
 }) {
+  const [selectedWeekdays, setSelectedWeekdays] = useState(config.weekdays);
   const [rangeStart, setRangeStart] = useState('');
   const [rangeEnd, setRangeEnd] = useState('');
   const [reserveDate, setReserveDate] = useState<string | null>(null);
   const today = toDateStr(new Date());
+
+  useEffect(() => {
+    setSelectedWeekdays(config.weekdays);
+  }, [config.weekdays]);
 
   const bookedTimes = new Set(
     reserveDate ? appointments.filter((a) => a.date === reserveDate).map((a) => a.time) : []
@@ -807,11 +812,19 @@ function DaysTab({
     .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)));
 
   const toggleWeekday = async (day: number) => {
-    const next = config.weekdays.includes(day)
-      ? config.weekdays.filter((d) => d !== day)
-      : [...config.weekdays, day].sort();
-    await setWeekdays(next);
-    onChange();
+    const next = selectedWeekdays.includes(day)
+      ? selectedWeekdays.filter((d) => d !== day)
+      : [...selectedWeekdays, day].sort();
+
+    // Altera a aparência no instante do clique, sem esperar a atualização remota.
+    setSelectedWeekdays(next);
+    try {
+      await setWeekdays(next);
+      onChange();
+    } catch {
+      // Mantém a seleção que estava salva caso a gravação falhe.
+      setSelectedWeekdays(config.weekdays);
+    }
   };
 
   const handleToggleDate = async (dateStr: string) => {
@@ -848,10 +861,11 @@ function DaysTab({
         <CardContent>
           <div className="flex flex-wrap gap-2">
             {WEEKDAY_NAMES.map((name, day) => {
-              const active = config.weekdays.includes(day);
+              const active = selectedWeekdays.includes(day);
               return (
                 <button
                   key={day}
+                  type="button"
                   onClick={() => toggleWeekday(day)}
                   className={`h-11 px-4 rounded-lg text-sm font-medium border transition-colors ${
                     active
