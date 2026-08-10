@@ -52,13 +52,15 @@ export function BookingSection() {
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<{ date: string; time: string; service: string; price: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loadError, setLoadError] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
       setData(await fetchPublicData());
       setRefreshKey((k) => k + 1);
+      setLoadError(false);
     } catch {
-      // mantém os dados anteriores em caso de falha de rede
+      setLoadError(true);
     }
   }, []);
 
@@ -139,6 +141,10 @@ export function BookingSection() {
         setSelectedTime(null);
         await refresh();
       }
+    } catch {
+      setError(
+        'Não foi possível conectar à agenda agora. Verifique sua internet e tente novamente.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -170,8 +176,19 @@ export function BookingSection() {
             <CardContent className="p-6 md:p-10">
               {!data ? (
                 <div className="py-20 flex flex-col items-center gap-3 text-muted-foreground">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  Carregando horários disponíveis...
+                  {loadError ? (
+                    <>
+                      <p className="text-center">
+                        Não foi possível carregar a agenda agora. Tente novamente em instantes.
+                      </p>
+                      <Button variant="outline" onClick={refresh}>Tentar novamente</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      Carregando horários disponíveis...
+                    </>
+                  )}
                 </div>
               ) : confirmed ? (
                 <div className="text-center py-12 space-y-6">

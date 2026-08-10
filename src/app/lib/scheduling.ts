@@ -238,7 +238,9 @@ export async function fetchConfig(): Promise<ScheduleConfig> {
     .select('data')
     .eq('id', 1)
     .single();
-  if (error || !data) return { ...DEFAULT_CONFIG };
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Não foi possível carregar a configuração da agenda.');
+  }
   return normalizeConfig(data.data);
 }
 
@@ -258,7 +260,8 @@ export async function fetchPublicData(): Promise<ScheduleData> {
   if (!supabase) {
     booked = localLoadAppointments().map((a) => ({ date: a.date, time: a.time }));
   } else {
-    const { data } = await supabase.rpc('get_booked_slots');
+    const { data, error } = await supabase.rpc('get_booked_slots');
+    if (error) throw new Error(error.message);
     booked = (data ?? []).map((r: any) => ({
       date: String(r.slot_date),
       time: normalizeTime(r.slot_time),
@@ -377,7 +380,9 @@ export async function fetchAppointments(): Promise<Appointment[]> {
     .select('*')
     .order('date', { ascending: true })
     .order('time', { ascending: true });
-  if (error || !data) return [];
+  if (error || !data) {
+    throw new Error(error?.message ?? 'Não foi possível carregar os agendamentos.');
+  }
   return data.map((r: any) => ({
     id: String(r.id),
     name: r.name,
@@ -397,7 +402,8 @@ export async function cancelAppointment(id: string): Promise<void> {
     localSaveAppointments(localLoadAppointments().filter((a) => a.id !== id));
     return;
   }
-  await supabase.from('appointments').delete().eq('id', id);
+  const { error } = await supabase.from('appointments').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 // ---------- Mutações de configuração (admin) ----------
