@@ -29,7 +29,7 @@ type BookingLocation = 'online' | 'ribeirao-claro' | 'ourinhos';
 const BOOKING_LOCATIONS: { id: BookingLocation; label: string }[] = [
   { id: 'online', label: 'Online' },
   { id: 'ribeirao-claro', label: 'Ribeirão Claro' },
-  { id: 'ourinhos', label: 'Ourinhos (instituto)' },
+  { id: 'ourinhos', label: 'Ourinhos e região' },
 ];
 
 const LOCATION_OBJECTIVE_PREFIX: Record<'online' | 'ribeirao-claro', string> = {
@@ -39,7 +39,7 @@ const LOCATION_OBJECTIVE_PREFIX: Record<'online' | 'ribeirao-claro', string> = {
 
 const WHATSAPP_NUMBER = '5543988300445';
 const OURINHOS_WHATSAPP_MESSAGE =
-  'Olá! Gostaria de agendar uma consulta no instituto em Ourinhos.';
+  'Olá! Gostaria de agendar uma consulta presencial em Ourinhos ou região.';
 
 export function BookingSection() {
   const [data, setData] = useState<ScheduleData | null>(null);
@@ -334,8 +334,8 @@ export function BookingSection() {
                     {selectedLocation === 'ourinhos' ? (
                       <div className="space-y-4 rounded-lg border border-border bg-background p-6">
                         <p className="text-muted-foreground">
-                          O atendimento em Ourinhos é realizado no instituto e deve ser agendado
-                          diretamente pelo WhatsApp.
+                          Os atendimentos em Ourinhos e região devem ser agendados diretamente pelo
+                          WhatsApp.
                         </p>
                         <Button
                           size="lg"
