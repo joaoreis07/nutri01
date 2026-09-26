@@ -368,22 +368,30 @@ export async function bookAppointment(input: {
     date: input.date,
     time: input.time,
   };
-  let { error } = await supabase.from('appointments').insert(row);
+  let insertedId: string | null = null;
+  const firstInsert = await supabase.from('appointments').insert(row).select('id').maybeSingle();
+  let error = firstInsert.error;
+  insertedId = firstInsert.data?.id ? String(firstInsert.data.id) : null;
 
   // Coluna nova ainda não criada: grava a data no objetivo, sem perder o agendamento.
   if (error && isMissingBirthDateColumn(error)) {
     const [year, month, day] = input.birthDate.split('-');
-    const fallback = await supabase.from('appointments').insert({
-      name: row.name,
-      whatsapp: row.whatsapp,
-      email: row.email,
-      objective: `Nascimento: ${day}/${month}/${year} | ${row.objective}`,
-      service: row.service,
-      price: row.price,
-      date: row.date,
-      time: row.time,
-    });
+    const fallback = await supabase
+      .from('appointments')
+      .insert({
+        name: row.name,
+        whatsapp: row.whatsapp,
+        email: row.email,
+        objective: `Nascimento: ${day}/${month}/${year} | ${row.objective}`,
+        service: row.service,
+        price: row.price,
+        date: row.date,
+        time: row.time,
+      })
+      .select('id')
+      .maybeSingle();
     error = fallback.error;
+    insertedId = fallback.data?.id ? String(fallback.data.id) : null;
   }
 
   if (error) {
@@ -391,7 +399,21 @@ export async function bookAppointment(input: {
     if (error.code === '23505') return { success: false, error: SLOT_TAKEN_ERROR };
     return { success: false, error: 'Não foi possível agendar. Tente novamente.' };
   }
+
+  if (insertedId) notifyNutritionist(insertedId);
   return { success: true };
+}
+
+/** Avisa a nutricionista por e-mail. Falha aqui não desfaz o agendamento. */
+function notifyNutritionist(appointmentId: string): void {
+  const base = import.meta.env.BASE_URL || '/';
+  const url = `${base.endsWith('/') ? base : `${base}/`}api/notify-booking`;
+  void fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+    body: JSON.stringify({ id: appointmentId }),
+    keepalive: true,
+  }).catch(() => undefined);
 }
 
 function isMissingBirthDateColumn(error: { code?: string; message?: string }): boolean {

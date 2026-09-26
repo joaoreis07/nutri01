@@ -2,6 +2,15 @@
   command = "npm run build"
   publish = "dist"
 
+[functions]
+  directory = "netlify/functions"
+
+[[redirects]]
+  from = "/api/notify-booking"
+  to = "/.netlify/functions/notify-booking"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
