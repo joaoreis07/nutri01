@@ -433,6 +433,12 @@ function AppointmentCard({
               <MessageCircle className="w-4 h-4 text-primary flex-shrink-0" />
               {a.whatsapp}
             </div>
+            {a.birthDate && (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CalendarDays className="w-4 h-4 text-primary flex-shrink-0" />
+                Nascimento: {formatDateShortBR(a.birthDate)}
+              </div>
+            )}
             <div className="flex items-center gap-2 text-muted-foreground">
               <Mail className="w-4 h-4 text-primary flex-shrink-0" />
               {a.email}

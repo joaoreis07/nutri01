@@ -14,6 +14,8 @@ export interface Appointment {
   name: string;
   whatsapp: string;
   email: string;
+  /** Data de nascimento (YYYY-MM-DD). Ausente nos agendamentos anteriores a este campo. */
+  birthDate?: string;
   objective: string;
   /** Serviço escolhido e valor no momento do agendamento */
   service?: string;
@@ -323,6 +325,7 @@ export async function bookAppointment(input: {
   name: string;
   whatsapp: string;
   email: string;
+  birthDate: string;
   objective: string;
   service: string;
   price: number;
@@ -342,6 +345,7 @@ export async function bookAppointment(input: {
       name: input.name.trim(),
       whatsapp: input.whatsapp.trim(),
       email: input.email.trim(),
+      birthDate: input.birthDate,
       objective: input.objective.trim(),
       service: input.service,
       price: input.price,
@@ -353,16 +357,34 @@ export async function bookAppointment(input: {
     return { success: true };
   }
 
-  const { error } = await supabase.from('appointments').insert({
+  const row = {
     name: input.name.trim(),
     whatsapp: input.whatsapp.trim(),
     email: input.email.trim(),
+    birth_date: input.birthDate,
     objective: input.objective.trim(),
     service: input.service,
     price: input.price,
     date: input.date,
     time: input.time,
-  });
+  };
+  let { error } = await supabase.from('appointments').insert(row);
+
+  // Coluna nova ainda não criada: grava a data no objetivo, sem perder o agendamento.
+  if (error && isMissingBirthDateColumn(error)) {
+    const [year, month, day] = input.birthDate.split('-');
+    const fallback = await supabase.from('appointments').insert({
+      name: row.name,
+      whatsapp: row.whatsapp,
+      email: row.email,
+      objective: `Nascimento: ${day}/${month}/${year} | ${row.objective}`,
+      service: row.service,
+      price: row.price,
+      date: row.date,
+      time: row.time,
+    });
+    error = fallback.error;
+  }
 
   if (error) {
     // 23505 = violação de chave única (duas pessoas tentaram o mesmo horário)
@@ -370,6 +392,28 @@ export async function bookAppointment(input: {
     return { success: false, error: 'Não foi possível agendar. Tente novamente.' };
   }
   return { success: true };
+}
+
+function isMissingBirthDateColumn(error: { code?: string; message?: string }): boolean {
+  const message = error.message ?? '';
+  return error.code === 'PGRST204' || error.code === '42703' || /birth_date/i.test(message);
+}
+
+/** Lê a data de nascimento sem alterar o texto dos agendamentos antigos. */
+function readBirthDate(
+  birthDate: unknown,
+  objective: unknown
+): { birthDate?: string; objective: string } {
+  const text = String(objective ?? '');
+  if (birthDate) {
+    return { birthDate: String(birthDate).slice(0, 10), objective: text };
+  }
+  const match = text.match(/^Nascimento: (\d{2})\/(\d{2})\/(\d{4}) \| ([\s\S]*)$/);
+  if (!match) return { objective: text };
+  return {
+    birthDate: `${match[3]}-${match[2]}-${match[1]}`,
+    objective: match[4],
+  };
 }
 
 /** Lista completa de agendamentos (somente painel admin). */
@@ -388,7 +432,7 @@ export async function fetchAppointments(): Promise<Appointment[]> {
     name: r.name,
     whatsapp: r.whatsapp,
     email: r.email,
-    objective: r.objective,
+    ...readBirthDate(r.birth_date, r.objective),
     service: r.service ?? undefined,
     price: r.price != null ? Number(r.price) : undefined,
     date: String(r.date),

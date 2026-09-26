@@ -43,6 +43,7 @@ create table if not exists appointments (
   name text not null,
   whatsapp text not null,
   email text not null,
+  birth_date date,
   objective text not null,
   service text,
   price numeric,

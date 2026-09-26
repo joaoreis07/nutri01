@@ -37,9 +37,32 @@ const LOCATION_OBJECTIVE_PREFIX: Record<'online' | 'ribeirao-claro', string> = {
   'ribeirao-claro': '[Ribeirão Claro] ',
 };
 
-const WHATSAPP_NUMBER = '5543988300445';
+const OURINHOS_WHATSAPP_NUMBER = '5514997154514';
 const OURINHOS_WHATSAPP_MESSAGE =
   'Olá! Gostaria de agendar uma consulta presencial em Ourinhos ou região.';
+
+function todayInputValue(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function isValidBirthDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return false;
+  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return year >= 1900 && date <= today;
+}
 
 export function BookingSection() {
   const [data, setData] = useState<ScheduleData | null>(null);
@@ -47,7 +70,13 @@ export function BookingSection() {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<BookingLocation | null>(null);
-  const [form, setForm] = useState({ name: '', whatsapp: '', email: '', objective: '' });
+  const [form, setForm] = useState({
+    name: '',
+    birthDate: '',
+    whatsapp: '',
+    email: '',
+    objective: '',
+  });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmed, setConfirmed] = useState<{ date: string; time: string; service: string; price: number } | null>(null);
@@ -96,8 +125,10 @@ export function BookingSection() {
     setForm((f) => ({ ...f, [field]: value }));
   };
 
+  const birthDateValid = isValidBirthDate(form.birthDate);
   const formValid =
     form.name.trim().length >= 3 &&
+    birthDateValid &&
     form.whatsapp.replace(/\D/g, '').length >= 10 &&
     /\S+@\S+\.\S+/.test(form.email) &&
     form.objective.trim().length > 0;
@@ -152,7 +183,7 @@ export function BookingSection() {
 
   const resetBooking = async () => {
     setConfirmed(null);
-    setForm({ name: '', whatsapp: '', email: '', objective: '' });
+    setForm({ name: '', birthDate: '', whatsapp: '', email: '', objective: '' });
     setSelectedDate(null);
     setSelectedTime(null);
     setSelectedServiceId(null);
@@ -269,6 +300,24 @@ export function BookingSection() {
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-foreground mb-1.5">
+                          Data de nascimento
+                        </label>
+                        <input
+                          type="date"
+                          value={form.birthDate}
+                          onChange={(e) => updateForm('birthDate', e.target.value)}
+                          min="1900-01-01"
+                          max={todayInputValue()}
+                          className={inputClass}
+                        />
+                        {form.birthDate && !birthDateValid && (
+                          <p className="text-xs text-destructive mt-1.5">
+                            Informe uma data de nascimento válida.
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1.5">
                           WhatsApp
                         </label>
                         <input
@@ -342,7 +391,7 @@ export function BookingSection() {
                           className="w-full"
                           onClick={() =>
                             window.open(
-                              `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(OURINHOS_WHATSAPP_MESSAGE)}`,
+                              `https://wa.me/${OURINHOS_WHATSAPP_NUMBER}?text=${encodeURIComponent(OURINHOS_WHATSAPP_MESSAGE)}`,
                               '_blank',
                             )
                           }
