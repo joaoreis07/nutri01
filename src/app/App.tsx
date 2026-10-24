@@ -23,13 +23,14 @@ import { Button } from './components/Button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './components/Card';
 import naraHero from '../assets/nara-hero.png';
 import naraSobre from '../assets/nara-sobre.png';
+import { WhatsappBookingModal } from './components/WhatsappBookingModal';
+import { NARA_WHATSAPP_E164, PROFESSIONAL_REGISTRATION } from './lib/contact';
 
 export default function App() {
-  const whatsappNumber = "5543988300445"; // Número da nutricionista
-  const whatsappMessage = "Olá! Gostaria de agendar uma consulta nutricional.";
+  const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
 
   const handleWhatsApp = () => {
-    window.open(`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(whatsappMessage)}`, '_blank');
+    setWhatsappModalOpen(true);
   };
 
   const handleAgendar = () => {
@@ -172,7 +173,7 @@ export default function App() {
                     <Check className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
                     <div>
                       <div className="font-semibold text-foreground">Registros Profissionais</div>
-                      <div className="text-muted-foreground">CRN-8 19896/P · CREF 038535-G/PR</div>
+                      <div className="text-muted-foreground">{PROFESSIONAL_REGISTRATION}</div>
                     </div>
                   </div>
                 </div>
@@ -470,7 +471,7 @@ export default function App() {
                   <Instagram className="w-5 h-5" />
                 </a>
                 <a
-                  href={`https://wa.me/${whatsappNumber}`}
+                  href={`https://wa.me/${NARA_WHATSAPP_E164}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
@@ -488,7 +489,7 @@ export default function App() {
           </div>
 
           <div className="border-t border-border pt-8 text-center text-muted-foreground">
-            <p>&copy; 2026 Nara Rossetto. Todos os direitos reservados. CRN-8 19896/P · CREF 038535-G/PR</p>
+            <p>&copy; 2026 Nara Rossetto. Todos os direitos reservados. {PROFESSIONAL_REGISTRATION}</p>
             <div className="mt-6 flex justify-center">
               <a
                 href="#/admin"
@@ -501,6 +502,8 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      <WhatsappBookingModal open={whatsappModalOpen} onOpenChange={setWhatsappModalOpen} />
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import { motion } from 'motion/react';
 import { Instagram, Mail, MapPin, MessageCircle } from 'lucide-react';
 import { BookingSection } from './components/BookingSection';
+import { NARA_WHATSAPP_E164, PROFESSIONAL_REGISTRATION } from './lib/contact';
 
 export default function BookingPage() {
-  const whatsappNumber = "5543988300445";
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -22,7 +22,7 @@ export default function BookingPage() {
             </p>
             <p className="text-muted-foreground flex items-center justify-center gap-2 text-sm">
               <MapPin className="w-4 h-4 text-primary" />
-              Atendimento online e presencial em Ribeirão Claro - PR
+              Atendimento online e presencial
             </p>
           </motion.div>
         </div>
@@ -46,7 +46,7 @@ export default function BookingPage() {
               <Instagram className="w-5 h-5" />
             </a>
             <a
-              href={`https://wa.me/${whatsappNumber}`}
+              href={`https://wa.me/${NARA_WHATSAPP_E164}`}
               target="_blank"
               rel="noopener noreferrer"
               className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
@@ -61,7 +61,7 @@ export default function BookingPage() {
             </a>
           </div>
           <p className="text-sm text-muted-foreground text-center">
-            &copy; 2026 Nara Rossetto. Todos os direitos reservados. CRN-8 19896/P · CREF 038535-G/PR
+            &copy; 2026 Nara Rossetto. Todos os direitos reservados. {PROFESSIONAL_REGISTRATION}
           </p>
         </div>
       </footer>

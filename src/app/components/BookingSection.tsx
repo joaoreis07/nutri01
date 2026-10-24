@@ -24,22 +24,17 @@ const fadeInUp = {
 const inputClass =
   'w-full h-12 px-4 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
 
-type BookingLocation = 'online' | 'ribeirao-claro' | 'ourinhos';
+type BookingLocation = 'online' | 'presencial';
 
 const BOOKING_LOCATIONS: { id: BookingLocation; label: string }[] = [
   { id: 'online', label: 'Online' },
-  { id: 'ribeirao-claro', label: 'Ribeirão Claro' },
-  { id: 'ourinhos', label: 'Ourinhos e região' },
+  { id: 'presencial', label: 'Presencial' },
 ];
 
-const LOCATION_OBJECTIVE_PREFIX: Record<'online' | 'ribeirao-claro', string> = {
+const LOCATION_OBJECTIVE_PREFIX: Record<BookingLocation, string> = {
   online: '[Online] ',
-  'ribeirao-claro': '[Ribeirão Claro] ',
+  presencial: '[Presencial] ',
 };
-
-const OURINHOS_WHATSAPP_NUMBER = '5514997154514';
-const OURINHOS_WHATSAPP_MESSAGE =
-  'Olá! Gostaria de agendar uma consulta presencial em Ourinhos ou região.';
 
 function todayInputValue(): string {
   const now = new Date();
@@ -136,7 +131,6 @@ export function BookingSection() {
   const canConfirm =
     formValid &&
     selectedLocation !== null &&
-    selectedLocation !== 'ourinhos' &&
     selectedDate !== null &&
     selectedTime !== null &&
     selectedService !== null &&
@@ -147,10 +141,9 @@ export function BookingSection() {
     setError(null);
     setSubmitting(true);
     try {
-      const locationPrefix =
-        selectedLocation === 'online' || selectedLocation === 'ribeirao-claro'
-          ? LOCATION_OBJECTIVE_PREFIX[selectedLocation]
-          : '';
+      const locationPrefix = selectedLocation
+        ? LOCATION_OBJECTIVE_PREFIX[selectedLocation]
+        : '';
 
       const result = await bookAppointment({
         ...form,
@@ -380,27 +373,7 @@ export function BookingSection() {
                       </div>
                     </div>
 
-                    {selectedLocation === 'ourinhos' ? (
-                      <div className="space-y-4 rounded-lg border border-border bg-background p-6">
-                        <p className="text-muted-foreground">
-                          Os atendimentos em Ourinhos e região devem ser agendados diretamente pelo
-                          WhatsApp.
-                        </p>
-                        <Button
-                          size="lg"
-                          className="w-full"
-                          onClick={() =>
-                            window.open(
-                              `https://wa.me/${OURINHOS_WHATSAPP_NUMBER}?text=${encodeURIComponent(OURINHOS_WHATSAPP_MESSAGE)}`,
-                              '_blank',
-                            )
-                          }
-                        >
-                          <MessageCircle className="w-5 h-5" />
-                          Agendar pelo WhatsApp
-                        </Button>
-                      </div>
-                    ) : selectedLocation ? (
+                    {selectedLocation ? (
                       <>
                         <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
                           <CalendarDays className="w-5 h-5 text-primary" />
