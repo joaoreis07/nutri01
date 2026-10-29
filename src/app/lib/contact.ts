@@ -10,6 +10,11 @@ export const SANTA_CRUZ_CLINIC_WHATSAPP_E164 = '5514996080605';
 export const PROFESSIONAL_REGISTRATION =
   'CRN-8 19896/P · CRN-3 00933/S · CREF 038535-G/PR';
 
+/** Mensagem padrão para agendamento nas clínicas (formulário do site e modal). */
+export function buildClinicBookingMessage(cityTag: string): string {
+  return `Oi! Quero agendar uma consulta com a Dra. Nara Rossetto em ${cityTag}.`;
+}
+
 export const WHATSAPP_MODAL = {
   online: {
     message:
@@ -25,14 +30,12 @@ export const WHATSAPP_MODAL = {
     ourinhos: {
       label: 'Ourinhos - SP',
       phone: OURINHOS_WHATSAPP_E164,
-      message:
-        'Olá! Tudo bem? 😊 Gostaria de agendar uma consulta nutricional presencial com a nutricionista Nara Rossetto em Ourinhos - SP. Poderia me informar os horários disponíveis, por favor?',
+      message: buildClinicBookingMessage('Ourinhos-SP'),
     },
     'santa-cruz': {
       label: 'Santa Cruz do Rio Pardo - SP',
       phone: SANTA_CRUZ_CLINIC_WHATSAPP_E164,
-      message:
-        'Olá! Tudo bem? 😊 Gostaria de agendar uma consulta nutricional presencial com a nutricionista Nara Rossetto em Santa Cruz do Rio Pardo - SP. Poderia me informar os horários disponíveis, por favor?',
+      message: buildClinicBookingMessage('Santa Cruz do Rio Pardo-SP'),
     },
   },
 } as const;
@@ -42,13 +45,11 @@ export type PresencialCity = keyof typeof WHATSAPP_MODAL.presencial;
 export const FORM_WHATSAPP = {
   ourinhos: {
     phone: OURINHOS_WHATSAPP_E164,
-    message:
-      'Olá! Gostaria de agendar uma consulta presencial em Ourinhos - SP.',
+    message: buildClinicBookingMessage('Ourinhos-SP'),
   },
   'santa-cruz': {
     phone: SANTA_CRUZ_CLINIC_WHATSAPP_E164,
-    message:
-      'Olá! Gostaria de agendar uma consulta presencial em Santa Cruz do Rio Pardo - SP.',
+    message: buildClinicBookingMessage('Santa Cruz do Rio Pardo-SP'),
   },
 } as const;
 

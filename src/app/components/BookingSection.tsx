@@ -5,6 +5,14 @@ import { Button } from './Button';
 import { Card, CardContent } from './Card';
 import { Calendar } from './Calendar';
 import {
+  BOOKING_LOCATION_OPTIONS,
+  BookingLocationId,
+  getBookingLocationOption,
+  isSiteBookingLocation,
+  isWhatsAppBookingLocation,
+} from '../lib/booking-locations';
+import { openWhatsApp } from '../lib/contact';
+import {
   ScheduleData,
   bookAppointment,
   dayHasFreeSlots,
@@ -23,18 +31,6 @@ const fadeInUp = {
 
 const inputClass =
   'w-full h-12 px-4 rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-colors';
-
-type BookingLocation = 'online' | 'presencial';
-
-const BOOKING_LOCATIONS: { id: BookingLocation; label: string }[] = [
-  { id: 'online', label: 'Online' },
-  { id: 'presencial', label: 'Presencial' },
-];
-
-const LOCATION_OBJECTIVE_PREFIX: Record<BookingLocation, string> = {
-  online: '[Online] ',
-  presencial: '[Presencial] ',
-};
 
 function todayInputValue(): string {
   const now = new Date();
@@ -64,7 +60,7 @@ export function BookingSection() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<BookingLocation | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<BookingLocationId | null>(null);
   const [form, setForm] = useState({
     name: '',
     birthDate: '',
@@ -109,12 +105,18 @@ export function BookingSection() {
     setError(null);
   };
 
-  const handleSelectLocation = (location: BookingLocation) => {
+  const handleSelectLocation = (location: BookingLocationId) => {
     setSelectedLocation(location);
     setSelectedDate(null);
     setSelectedTime(null);
     setError(null);
   };
+
+  const selectedLocationOption = selectedLocation
+    ? getBookingLocationOption(selectedLocation)
+    : null;
+  const siteBookingSelected = isSiteBookingLocation(selectedLocation);
+  const whatsAppBookingSelected = isWhatsAppBookingLocation(selectedLocation);
 
   const updateForm = (field: keyof typeof form, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -130,28 +132,30 @@ export function BookingSection() {
 
   const canConfirm =
     formValid &&
-    selectedLocation !== null &&
+    siteBookingSelected &&
     selectedDate !== null &&
     selectedTime !== null &&
     selectedService !== null &&
     !submitting;
 
   const handleConfirm = async () => {
-    if (!selectedDate || !selectedTime || !selectedService) return;
+    if (!selectedDate || !selectedTime || !selectedService || !siteBookingSelected) return;
+    if (!isSiteBookingLocation(selectedLocation)) return;
+
+    const siteOption = getBookingLocationOption(selectedLocation);
+    if (!siteOption || siteOption.channel !== 'site') return;
+
     setError(null);
     setSubmitting(true);
     try {
-      const locationPrefix = selectedLocation
-        ? LOCATION_OBJECTIVE_PREFIX[selectedLocation]
-        : '';
-
       const result = await bookAppointment({
         ...form,
-        objective: locationPrefix + form.objective.trim(),
+        objective: siteOption.objectivePrefix + form.objective.trim(),
         service: selectedService.name,
         price: selectedService.price,
         date: selectedDate,
         time: selectedTime,
+        bookingLocation: selectedLocation,
       });
       if (result.success) {
         setConfirmed({
@@ -356,24 +360,48 @@ export function BookingSection() {
                         Onde deseja o atendimento?
                       </h3>
                       <div className="space-y-2">
-                        {BOOKING_LOCATIONS.map((location) => (
+                        {BOOKING_LOCATION_OPTIONS.map((location) => (
                           <button
                             key={location.id}
                             type="button"
                             onClick={() => handleSelectLocation(location.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-left transition-colors ${
+                            className={`w-full flex flex-col items-start gap-0.5 px-4 py-3 rounded-lg border text-left transition-colors ${
                               selectedLocation === location.id
                                 ? 'border-primary bg-primary/10'
                                 : 'border-border hover:border-primary/50'
                             }`}
                           >
-                            <span className="text-sm font-medium text-foreground">{location.label}</span>
+                            <span className="text-sm font-medium text-foreground">{location.title}</span>
+                            <span className="text-xs text-muted-foreground leading-snug">
+                              {location.subtitle}
+                            </span>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {selectedLocation ? (
+                    {whatsAppBookingSelected &&
+                    selectedLocationOption &&
+                    selectedLocationOption.channel === 'whatsapp' ? (
+                      <div className="space-y-4 rounded-lg border border-border bg-background p-6">
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {selectedLocationOption.guidance}
+                        </p>
+                        <Button
+                          size="lg"
+                          className="w-full"
+                          onClick={() =>
+                            openWhatsApp(
+                              selectedLocationOption.phoneE164,
+                              selectedLocationOption.whatsappMessage,
+                            )
+                          }
+                        >
+                          <MessageCircle className="w-5 h-5" />
+                          Agendar pelo WhatsApp
+                        </Button>
+                      </div>
+                    ) : siteBookingSelected ? (
                       <>
                         <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
                           <CalendarDays className="w-5 h-5 text-primary" />
@@ -381,7 +409,7 @@ export function BookingSection() {
                         </h3>
 
                         <Calendar
-                          key={refreshKey}
+                          key={`${refreshKey}-${selectedLocation}`}
                           isDayEnabled={(d) => dayHasFreeSlots(data, d)}
                           selectedDate={selectedDate}
                           onSelectDate={handleSelectDate}

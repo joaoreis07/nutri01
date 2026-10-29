@@ -7,6 +7,11 @@
 //
 // O login do painel admin é sempre fixo no código (não usa Supabase Auth).
 
+import {
+  BookingLocationId,
+  isSiteBookingLocation,
+  SITE_BOOKING_REJECTED_ERROR,
+} from './booking-locations';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 
 export interface Appointment {
@@ -331,7 +336,12 @@ export async function bookAppointment(input: {
   price: number;
   date: string;
   time: string;
+  bookingLocation?: BookingLocationId;
 }): Promise<{ success: boolean; error?: string }> {
+  if (input.bookingLocation && !isSiteBookingLocation(input.bookingLocation)) {
+    return { success: false, error: SITE_BOOKING_REJECTED_ERROR };
+  }
+
   // Revalida disponibilidade no momento da confirmação
   const data = await fetchPublicData();
   if (!getAvailableTimes(data, input.date).includes(input.time)) {
