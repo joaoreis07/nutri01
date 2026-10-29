@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { CalendarDays, CheckCircle2, Clock, Loader2, MapPin, MessageCircle, Sparkles } from 'lucide-react';
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  Sparkles,
+} from 'lucide-react';
 import { Button } from './Button';
 import { Card, CardContent } from './Card';
 import { Calendar } from './Calendar';
@@ -73,6 +82,8 @@ export function BookingSection() {
   const [confirmed, setConfirmed] = useState<{ date: string; time: string; service: string; price: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadError, setLoadError] = useState(false);
+  /** Usuário abriu a lista de locais (antes disso, só o botão de entrada). */
+  const [locationsPanelOpen, setLocationsPanelOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -110,6 +121,15 @@ export function BookingSection() {
     setSelectedDate(null);
     setSelectedTime(null);
     setError(null);
+    setLocationsPanelOpen(true);
+  };
+
+  const handleChangeLocation = () => {
+    setSelectedLocation(null);
+    setSelectedDate(null);
+    setSelectedTime(null);
+    setError(null);
+    setLocationsPanelOpen(true);
   };
 
   const selectedLocationOption = selectedLocation
@@ -185,9 +205,14 @@ export function BookingSection() {
     setSelectedTime(null);
     setSelectedServiceId(null);
     setSelectedLocation(null);
+    setLocationsPanelOpen(false);
     setError(null);
     await refresh();
   };
+
+  const visibleLocationOptions = selectedLocation
+    ? BOOKING_LOCATION_OPTIONS.filter((option) => option.id === selectedLocation)
+    : BOOKING_LOCATION_OPTIONS;
 
   return (
     <section id="agendar" className="py-24 bg-secondary">
@@ -356,28 +381,85 @@ export function BookingSection() {
                   <div className="space-y-6">
                     <div className="space-y-3">
                       <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
-                        <MapPin className="w-5 h-5 text-primary" />
+                        <MapPin className="w-5 h-5 text-primary shrink-0" />
                         Onde deseja o atendimento?
                       </h3>
-                      <div className="space-y-2">
-                        {BOOKING_LOCATION_OPTIONS.map((location) => (
-                          <button
-                            key={location.id}
+
+                      {!locationsPanelOpen && !selectedLocation ? (
+                        <div className="space-y-3">
+                          <p className="text-sm text-muted-foreground">
+                            Toque abaixo para ver online, Ribeirão Claro e clínicas parceiras.
+                          </p>
+                          <Button
                             type="button"
-                            onClick={() => handleSelectLocation(location.id)}
-                            className={`w-full flex flex-col items-start gap-0.5 px-4 py-3 rounded-lg border text-left transition-colors ${
-                              selectedLocation === location.id
-                                ? 'border-primary bg-primary/10'
-                                : 'border-border hover:border-primary/50'
-                            }`}
+                            variant="secondary"
+                            size="lg"
+                            className="w-full h-auto min-h-12 whitespace-normal py-3 px-4 text-sm sm:text-base leading-snug border-2 border-primary/30 text-foreground hover:bg-primary/5"
+                            onClick={() => setLocationsPanelOpen(true)}
                           >
-                            <span className="text-sm font-medium text-foreground">{location.title}</span>
-                            <span className="text-xs text-muted-foreground leading-snug">
-                              {location.subtitle}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
+                            <MapPin className="w-5 h-5 shrink-0 text-primary" />
+                            Ver locais de agendamento
+                            <ChevronRight className="w-5 h-5 shrink-0 opacity-60" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {visibleLocationOptions.map((location) => {
+                            const isChosen = selectedLocation === location.id;
+                            const cardClass = `w-full flex flex-col items-start gap-0.5 px-4 py-3.5 sm:py-3 rounded-lg border text-left min-w-0 ${
+                              isChosen
+                                ? 'border-primary bg-primary/10 ring-1 ring-primary/20'
+                                : 'border-border hover:border-primary/50 active:bg-muted/50 transition-colors'
+                            }`;
+
+                            if (isChosen) {
+                              return (
+                                <div key={location.id} className={cardClass} aria-current="true">
+                                  <span className="text-sm font-medium text-foreground flex items-center gap-2">
+                                    <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden />
+                                    {location.title}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground leading-snug pl-6">
+                                    {location.subtitle}
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <button
+                                key={location.id}
+                                type="button"
+                                onClick={() => handleSelectLocation(location.id)}
+                                className={cardClass}
+                              >
+                                <span className="text-sm font-medium text-foreground">{location.title}</span>
+                                <span className="text-xs text-muted-foreground leading-snug">
+                                  {location.subtitle}
+                                </span>
+                              </button>
+                            );
+                          })}
+
+                          {selectedLocation ? (
+                            <button
+                              type="button"
+                              onClick={handleChangeLocation}
+                              className="text-sm font-medium text-primary hover:underline underline-offset-2 pt-1 px-1"
+                            >
+                              Escolher outro local
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setLocationsPanelOpen(false)}
+                              className="text-xs text-muted-foreground hover:text-foreground pt-1 px-1"
+                            >
+                              Ocultar locais
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {whatsAppBookingSelected &&
